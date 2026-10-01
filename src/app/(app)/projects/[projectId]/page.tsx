@@ -5,11 +5,15 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/app-shell/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { FeedbackStatusBadge } from "@/components/feedback/status-badge";
 import { DeleteProjectDialog } from "@/components/projects/delete-project-dialog";
 import { ProjectStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { requireWorkspace } from "@/lib/auth/session";
+import { listFeedbackForProject } from "@/lib/feedback/queries";
 import { getProject } from "@/lib/projects/queries";
+
+const RECENT_FEEDBACK_LIMIT = 5;
 
 export const metadata: Metadata = {
   title: "Project — Reviewly",
@@ -31,6 +35,9 @@ export default async function ProjectDetailPage({
   if (!project) {
     notFound();
   }
+
+  const feedbackItems = await listFeedbackForProject(project.id, organizationId);
+  const recentFeedback = feedbackItems.slice(0, RECENT_FEEDBACK_LIMIT);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -84,11 +91,53 @@ export default async function ProjectDetailPage({
       </p>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-foreground">Feedback</h2>
-        <EmptyState
-          title="No feedback yet"
-          description="Feedback collected from this project's website will appear here."
-        />
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-foreground">Feedback</h2>
+          <div className="flex gap-2">
+            {feedbackItems.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                render={<Link href={`/projects/${project.id}/feedback`} />}
+              >
+                View all
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={`/projects/${project.id}/feedback/new`} />}
+            >
+              Add feedback
+            </Button>
+          </div>
+        </div>
+
+        {feedbackItems.length === 0 ? (
+          <EmptyState
+            title="No feedback yet"
+            description="Feedback collected from this project's website will appear here."
+            action={
+              <Button render={<Link href={`/projects/${project.id}/feedback/new`} />}>
+                Add feedback
+              </Button>
+            }
+          />
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {recentFeedback.map((item) => (
+              <li key={item.id}>
+                <Link
+                  href={`/projects/${project.id}/feedback/${item.id}`}
+                  className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <span className="line-clamp-1 font-medium text-foreground">{item.message}</span>
+                  <FeedbackStatusBadge status={item.status} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
