@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
 
+import { PageHeader } from "@/components/app-shell/page-header";
+import { EmptyState } from "@/components/empty-state";
+
 export const metadata: Metadata = {
   title: "Clients — Reviewly",
 };
 
 export default function ClientsPage() {
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-1 flex-col items-start justify-center gap-2 px-6">
-      <h1 className="text-xl font-semibold">Clients</h1>
-      <p className="text-sm text-muted-foreground">Coming soon.</p>
+    <div className="flex flex-1 flex-col gap-6">
+      <PageHeader title="Clients" description="Manage your clients" />
+      <EmptyState
+        title="No clients yet"
+        description="Clients will appear here once they are added."
+      />
     </div>
   );
 }

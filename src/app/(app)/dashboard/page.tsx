@@ -1,24 +1,29 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
-import { getWorkspace, requireWorkspace } from "@/lib/auth/session";
+import { PageHeader } from "@/components/app-shell/page-header";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/empty-state";
+import { requireWorkspace } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Dashboard — Reviewly",
 };
 
 export default async function DashboardPage() {
-  const { user, organizationId } = await requireWorkspace();
-  const workspace = await getWorkspace(organizationId);
+  const { user } = await requireWorkspace();
+  const firstName = user.name.split(" ")[0] ?? user.name;
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-1 flex-col items-start justify-center gap-4 px-6">
-      <p className="text-sm font-medium text-muted-foreground">Reviewly</p>
-      <h1 className="text-xl font-semibold">
-        Workspace: {workspace?.name ?? "Unknown workspace"}
-      </h1>
-      <p className="text-sm text-muted-foreground">Welcome, {user.name}</p>
-      <SignOutButton />
+    <div className="flex flex-1 flex-col gap-6">
+      <PageHeader title="Dashboard" description="Overview of your workspace" />
+      <EmptyState
+        title={`Welcome back, ${firstName}`}
+        description="No projects yet. Create your first project to start collecting client feedback."
+        action={
+          <Button render={<Link href="/projects/new" />}>Create project</Button>
+        }
+      />
     </div>
   );
 }

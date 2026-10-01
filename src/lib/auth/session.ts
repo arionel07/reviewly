@@ -90,6 +90,16 @@ export async function redirectIfHasWorkspace() {
   return session;
 }
 
+/**
+ * All workspaces (Better Auth organizations) the current user belongs to.
+ * There is no switcher UI yet — the shell only shows the active workspace —
+ * but this keeps the shape ready for one without inventing separate state:
+ * the list always comes straight from Better Auth's own API.
+ */
+export async function listWorkspaces() {
+  return auth.api.listOrganizations({ headers: await headers() });
+}
+
 export async function getWorkspace(organizationId: string) {
   const [workspace] = await db
     .select({
