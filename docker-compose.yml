@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: reviewly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: reviewly
+    ports:
+      - '5432:5432'
+    volumes:
+      - reviewly_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  reviewly_postgres_data:

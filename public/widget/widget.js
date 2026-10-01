@@ -1,0 +1,1 @@
+(function(){new class{init(){console.log(`Reviewly widget initialized`)}}().init()})();
