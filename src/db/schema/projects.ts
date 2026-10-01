@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { user } from "./auth";
+import { organization } from "./auth";
 import { clients } from "./clients";
 import { projectStatusEnum } from "./enums";
 import { feedback } from "./feedback";
@@ -11,9 +11,9 @@ export const projects = pgTable(
   "project",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    ownerId: text("owner_id")
+    organizationId: text("organization_id")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "cascade" }),
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
@@ -28,16 +28,15 @@ export const projects = pgTable(
       .notNull(),
   },
   (table) => [
-    index("project_owner_id_idx").on(table.ownerId),
+    index("project_organization_id_idx").on(table.organizationId),
     index("project_client_id_idx").on(table.clientId),
-    index("project_status_idx").on(table.status),
   ],
 );
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
-  owner: one(user, {
-    fields: [projects.ownerId],
-    references: [user.id],
+  organization: one(organization, {
+    fields: [projects.organizationId],
+    references: [organization.id],
   }),
   client: one(clients, {
     fields: [projects.clientId],

@@ -9,7 +9,7 @@ export const projectStatusEnum = pgEnum("project_status", [
 
 export const feedbackStatusEnum = pgEnum("feedback_status", [
   "open",
+  "in_progress",
   "resolved",
-  "approved",
   "reopened",
 ]);

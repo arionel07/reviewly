@@ -10,7 +10,7 @@ export const reviewAccessTokens = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    token: text("token").notNull().unique(),
+    tokenHash: text("token_hash").notNull().unique(),
     expiresAt: timestamp("expires_at"),
     revokedAt: timestamp("revoked_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

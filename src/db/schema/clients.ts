@@ -1,16 +1,16 @@
 import { relations } from "drizzle-orm";
 import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { user } from "./auth";
+import { organization } from "./auth";
 import { projects } from "./projects";
 
 export const clients = pgTable(
   "client",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    ownerId: text("owner_id")
+    organizationId: text("organization_id")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     email: text("email"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -19,13 +19,13 @@ export const clients = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("client_owner_id_idx").on(table.ownerId)],
+  (table) => [index("client_organization_id_idx").on(table.organizationId)],
 );
 
 export const clientsRelations = relations(clients, ({ one, many }) => ({
-  owner: one(user, {
-    fields: [clients.ownerId],
-    references: [user.id],
+  organization: one(organization, {
+    fields: [clients.organizationId],
+    references: [organization.id],
   }),
   projects: many(projects),
 }));
