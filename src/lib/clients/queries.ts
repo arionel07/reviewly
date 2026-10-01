@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { clients } from "@/db/schema";
+import { isUuid } from "@/lib/db/is-uuid";
 
 /**
  * All clients in a workspace, newest first. `organizationId` must come
@@ -25,6 +26,10 @@ export async function listClients(organizationId: string) {
  * else's workspace.
  */
 export async function getClient(clientId: string, organizationId: string) {
+  if (!isUuid(clientId)) {
+    return null;
+  }
+
   const [client] = await db
     .select()
     .from(clients)
@@ -61,6 +66,10 @@ export async function updateClient(
   organizationId: string,
   data: ClientWriteInput,
 ) {
+  if (!isUuid(clientId)) {
+    return null;
+  }
+
   const [updated] = await db
     .update(clients)
     .set({ name: data.name, email: data.email ?? null })
@@ -77,6 +86,10 @@ export async function updateClient(
  * delete affects zero rows instead of someone else's client.
  */
 export async function deleteClient(clientId: string, organizationId: string) {
+  if (!isUuid(clientId)) {
+    return null;
+  }
+
   const [deleted] = await db
     .delete(clients)
     .where(

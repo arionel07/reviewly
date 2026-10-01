@@ -6,9 +6,11 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { DeleteClientDialog } from "@/components/clients/delete-client-dialog";
+import { ProjectStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { requireWorkspace } from "@/lib/auth/session";
 import { getClient } from "@/lib/clients/queries";
+import { listProjectsForClient } from "@/lib/projects/queries";
 
 export const metadata: Metadata = {
   title: "Client — Reviewly",
@@ -31,6 +33,8 @@ export default async function ClientDetailPage({
     notFound();
   }
 
+  const projects = await listProjectsForClient(client.id, organizationId);
+
   return (
     <div className="flex flex-1 flex-col gap-6">
       <PageHeader
@@ -51,11 +55,37 @@ export default async function ClientDetailPage({
       </p>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-foreground">Projects</h2>
-        <EmptyState
-          title="No projects yet"
-          description="Projects for this client will appear here."
-        />
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-foreground">Projects</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={`/projects/new?clientId=${client.id}`} />}
+          >
+            New project
+          </Button>
+        </div>
+
+        {projects.length === 0 ? (
+          <EmptyState
+            title="No projects yet"
+            description="Projects for this client will appear here."
+          />
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {projects.map((project) => (
+              <li key={project.id}>
+                <Link
+                  href={`/projects/${project.id}`}
+                  className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <span className="font-medium text-foreground">{project.name}</span>
+                  <ProjectStatusBadge status={project.status} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
