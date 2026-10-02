@@ -1,66 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { createActiveProject, createClient, signUpAndCreateWorkspace } from "./helpers";
+
 /**
  * The defining Phase 1 widget test: install on a page, select an
  * element, submit feedback through the widget, and see it land in the
  * existing Reviewly project UI — using the real app end to end, no
  * mocking.
  */
-
-async function signUpAndCreateWorkspace(
-  page: Page,
-  { name, email, workspaceName }: { name: string; email: string; workspaceName: string },
-) {
-  await page.goto("/sign-up");
-  await page.getByLabel("Name").fill(name);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("password123");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL("**/onboarding");
-  await page.getByLabel("Workspace name").fill(workspaceName);
-  await page.getByRole("button", { name: "Create workspace" }).click();
-  await page.waitForURL("**/dashboard");
-}
-
-async function createClient(page: Page, name: string) {
-  await page.goto("/clients/new");
-  await page.getByLabel("Name").fill(name);
-  await page.getByRole("button", { name: "Create client" }).click();
-  await page.waitForURL(/\/clients\/[0-9a-f-]+$/);
-}
-
-async function createActiveProject(
-  page: Page,
-  { name, clientName, websiteUrl }: { name: string; clientName: string; websiteUrl: string },
-) {
-  await page.goto("/projects/new");
-  await page.getByLabel("Project name").fill(name);
-  await page.locator("#project-client").click();
-  await page.getByRole("option", { name: clientName }).click();
-  await page.getByLabel("Website URL").fill(websiteUrl);
-  await page.getByRole("button", { name: "Create project" }).click();
-  await page.waitForURL(/\/projects\/[0-9a-f-]+$/);
-  const projectUrl = page.url();
-
-  // New projects default to "draft" — the widget only accepts
-  // submissions for an "active" project.
-  await page.goto(`${projectUrl}/edit`);
-  await page.locator("#project-status").click();
-  await page.getByRole("option", { name: "Active", exact: true }).click();
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await page.waitForURL(projectUrl);
-
-  const publicKey = await page
-    .locator("pre code")
-    .textContent()
-    .then((text) => {
-      const match = text?.match(/data-project-key="(pk_[^"]+)"/);
-      if (!match) throw new Error("Could not find project public key on the project page.");
-      return match[1];
-    });
-
-  return { projectUrl, publicKey };
-}
 
 test.describe("widget", () => {
   test("full flow: install, select, submit, appears in Reviewly", async ({ page }) => {
