@@ -11,7 +11,7 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
-		"widget:build": "vite build --config vite.widget.config.ts",
+		"widget:build": "vite build --config vite.widget.config.ts && cp node_modules/html2canvas/dist/html2canvas.min.js public/widget/html2canvas.min.js",
 		"widget:watch": "vite build --watch --config vite.widget.config.ts",
 		"test": "vitest",
 		"test:run": "vitest run",

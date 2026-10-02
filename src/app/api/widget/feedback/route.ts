@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { insertFeedback } from "@/lib/feedback/queries";
 import { getProjectByPublicKey } from "@/lib/projects/queries";
+import { widgetFeedbackRateLimiter, widgetRateLimitKey } from "@/lib/rate-limit/widget-limits";
+import { screenshotKeyBelongsToProject } from "@/lib/storage/screenshot-upload";
 import { buildWidgetCorsHeaders } from "@/lib/widget/cors";
 import { isOriginAllowedForProject } from "@/lib/widget/origin";
 import { widgetFeedbackSchema } from "@/lib/widget/schemas";
@@ -51,11 +53,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const rateLimitKey = widgetRateLimitKey(parsed.data.projectKey, request);
+  const rateLimit = widgetFeedbackRateLimiter.check(rateLimitKey);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests." },
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          "Retry-After": String(Math.ceil(rateLimit.retryAfterMs / 1000)),
+        },
+      },
+    );
+  }
+
   try {
     // The project is resolved fresh from the key on every submission —
     // the widget never carries a trusted internal projectId, and
-    // organizationId/status/authorUserId/screenshotUrl were never part
-    // of widgetFeedbackSchema in the first place, so none of those can
+    // organizationId/status/authorUserId were never part of
+    // widgetFeedbackSchema in the first place, so none of those can
     // arrive from the browser even in a malicious payload.
     const project = await getProjectByPublicKey(parsed.data.projectKey);
 
@@ -73,10 +91,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // screenshotKey is only ever accepted if it falls under this exact
+    // project's (and its organization's) own R2 prefix — a key for a
+    // different project, or a handwritten one that merely matches the
+    // schema's regex shape, is silently dropped rather than persisted.
+    const screenshotKey =
+      parsed.data.screenshotKey &&
+      screenshotKeyBelongsToProject(parsed.data.screenshotKey, project.organizationId, project.id)
+        ? parsed.data.screenshotKey
+        : undefined;
+
     const created = await insertFeedback(project.id, {
       message: parsed.data.message,
       pageUrl: parsed.data.pageUrl,
       selector: parsed.data.selector,
+      elementText: parsed.data.elementText,
+      screenshotKey,
       viewportWidth: parsed.data.viewportWidth,
       viewportHeight: parsed.data.viewportHeight,
       userAgent: parsed.data.userAgent,

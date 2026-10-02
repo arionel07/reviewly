@@ -113,6 +113,28 @@ export const widgetStyles = `
   overflow-wrap: anywhere;
 }
 
+.rw-composer-screenshot-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #9ca3af;
+}
+
+.rw-composer-screenshot-status {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: -6px;
+}
+
+.rw-composer-screenshot-status[data-state="captured"] {
+  color: #047857;
+}
+
+.rw-composer-screenshot-status[data-state="unavailable"] {
+  color: #9ca3af;
+}
+
 .rw-composer textarea {
   width: 100%;
   min-height: 80px;

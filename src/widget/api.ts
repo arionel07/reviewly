@@ -25,6 +25,54 @@ export async function fetchProjectConfig(
   return body.project as ProjectConfig;
 }
 
+export type UploadAuthorization = {
+  uploadUrl: string;
+  objectKey: string;
+  contentType: string;
+};
+
+export async function requestUploadAuthorization(
+  apiBaseUrl: string,
+  input: { projectKey: string; contentType: string; fileSize: number },
+): Promise<UploadAuthorization> {
+  const response = await fetch(`${apiBaseUrl}/api/widget/uploads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new WidgetApiError(body?.error ?? "Could not prepare the screenshot upload.");
+  }
+
+  return body as UploadAuthorization;
+}
+
+/**
+ * Uploads directly to R2 via the presigned URL — large binary traffic
+ * never passes through the Next.js app (see docs/ARCHITECTURE.md). Not
+ * using the shared `WidgetApiError`-wrapping convention here on purpose:
+ * callers treat any failure of this step as "no screenshot", not as a
+ * reason to fail the whole submission (see ReviewlyWidget.submitFeedback).
+ */
+export async function uploadScreenshot(
+  uploadUrl: string,
+  blob: Blob,
+  contentType: string,
+): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: blob,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Screenshot upload failed with status ${response.status}.`);
+  }
+}
+
 export async function submitFeedback(
   apiBaseUrl: string,
   payload: FeedbackPayloadInput,

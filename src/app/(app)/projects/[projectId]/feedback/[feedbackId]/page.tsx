@@ -7,10 +7,12 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { DeleteFeedbackDialog } from "@/components/feedback/delete-feedback-dialog";
 import { FeedbackCommentForm } from "@/components/feedback/feedback-comment-form";
 import { FeedbackStatusActions } from "@/components/feedback/feedback-status-actions";
+import { ScreenshotPreview } from "@/components/feedback/screenshot-preview";
 import { FeedbackStatusBadge } from "@/components/feedback/status-badge";
 import { Button } from "@/components/ui/button";
 import { requireWorkspace } from "@/lib/auth/session";
 import { getFeedback, listFeedbackComments } from "@/lib/feedback/queries";
+import { getFeedbackScreenshotUrl } from "@/lib/storage/screenshot-url";
 
 export const metadata: Metadata = {
   title: "Feedback — Reviewly",
@@ -34,11 +36,15 @@ export default async function FeedbackDetailPage({
   }
 
   const comments = await listFeedbackComments(feedbackId, projectId, organizationId);
+  const screenshotUrl = item.screenshotKey
+    ? await getFeedbackScreenshotUrl(item.screenshotKey)
+    : null;
 
   const contextRows: { label: string; value: string }[] = [
     { label: "Page", value: item.pageUrl },
   ];
   if (item.selector) contextRows.push({ label: "Element selector", value: item.selector });
+  if (item.elementText) contextRows.push({ label: "Element text", value: item.elementText });
   if (item.viewportWidth && item.viewportHeight) {
     contextRows.push({
       label: "Viewport",
@@ -75,6 +81,13 @@ export default async function FeedbackDetailPage({
         <p className="max-w-lg text-sm whitespace-pre-wrap text-foreground">{item.message}</p>
         <FeedbackStatusActions feedbackId={item.id} projectId={projectId} status={item.status} />
       </div>
+
+      {screenshotUrl && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-foreground">Screenshot</h2>
+          <ScreenshotPreview url={screenshotUrl} />
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-foreground">Context</h2>

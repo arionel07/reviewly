@@ -4,6 +4,7 @@ export type FeedbackPayloadInput = {
   pageUrl: string;
   selector?: string;
   elementText?: string;
+  screenshotKey?: string;
   viewportWidth?: number;
   viewportHeight?: number;
   userAgent?: string;
@@ -33,6 +34,10 @@ export function buildFeedbackPayload(input: FeedbackPayloadInput): FeedbackPaylo
 
   if (input.elementText) {
     payload.elementText = input.elementText.slice(0, MAX_ELEMENT_TEXT_LENGTH);
+  }
+
+  if (input.screenshotKey) {
+    payload.screenshotKey = input.screenshotKey;
   }
 
   if (typeof input.viewportWidth === "number") {

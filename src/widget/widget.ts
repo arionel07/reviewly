@@ -1,5 +1,14 @@
-import { fetchProjectConfig, submitFeedback, WidgetApiError, type ProjectConfig } from "@/widget/api";
+import {
+  fetchProjectConfig,
+  requestUploadAuthorization,
+  submitFeedback,
+  uploadScreenshot,
+  WidgetApiError,
+  type ProjectConfig,
+} from "@/widget/api";
+import { Html2CanvasScreenshotProvider } from "@/widget/lib/html2canvas-screenshot-provider";
 import { buildFeedbackPayload } from "@/widget/lib/payload";
+import type { ScreenshotProvider } from "@/widget/lib/screenshot";
 import { generateSelector } from "@/widget/lib/selector";
 import { extractElementText } from "@/widget/lib/text";
 import { widgetStyles } from "@/widget/styles";
@@ -13,6 +22,15 @@ type SelectedElementContext = {
 };
 
 type ComposerState = "idle" | "pending" | "error" | "success";
+
+type ScreenshotState = "idle" | "capturing" | "captured" | "unavailable";
+
+const SCREENSHOT_STATUS_TEXT: Record<ScreenshotState, string> = {
+  idle: "",
+  capturing: "Capturing…",
+  captured: "✓ Captured",
+  unavailable: "Screenshot unavailable — feedback can still be sent.",
+};
 
 export type ReviewlyWidgetOptions = {
   projectKey: string;
@@ -40,6 +58,12 @@ export class ReviewlyWidget {
   private selectedContext: SelectedElementContext | null = null;
   private composerState: ComposerState = "idle";
   private composerError: string | null = null;
+
+  private screenshotProvider: ScreenshotProvider | null = null;
+  private screenshotBlob: Blob | null = null;
+  private screenshotContentType: "image/webp" | "image/png" | null = null;
+  private screenshotState: ScreenshotState = "idle";
+  private screenshotStatusEl: HTMLDivElement | null = null;
 
   constructor(options: ReviewlyWidgetOptions) {
     this.projectKey = options.projectKey;
@@ -201,8 +225,63 @@ export class ReviewlyWidget {
       rect,
     };
 
+    this.screenshotBlob = null;
+    this.screenshotContentType = null;
+    this.screenshotState = "idle";
+
     this.disableInspectMode();
     this.openComposer();
+    void this.captureScreenshot();
+  }
+
+  /**
+   * Fire-and-forget: starts right after the composer opens so the user
+   * can start typing immediately, and never blocks or fails feedback
+   * submission (see submitFeedback) — only the status line it updates
+   * reflects whether a screenshot ended up available.
+   */
+  private async captureScreenshot(): Promise<void> {
+    if (!this.selectedContext || !this.host) return;
+
+    this.screenshotState = "capturing";
+    this.updateScreenshotStatusUI();
+
+    try {
+      this.screenshotProvider ??= new Html2CanvasScreenshotProvider(this.apiBaseUrl);
+
+      const rect = this.selectedContext.rect;
+      const result = await this.screenshotProvider.capture({
+        ignoreElement: this.host,
+        highlightRect: {
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+        },
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+      });
+
+      this.screenshotBlob = result.blob;
+      this.screenshotContentType = result.contentType;
+      this.screenshotState = "captured";
+    } catch (error) {
+      this.logDevError("Reviewly widget: screenshot capture failed", error);
+      this.screenshotBlob = null;
+      this.screenshotContentType = null;
+      this.screenshotState = "unavailable";
+    }
+
+    this.updateScreenshotStatusUI();
+  }
+
+  private updateScreenshotStatusUI(): void {
+    if (!this.screenshotStatusEl) return;
+
+    this.screenshotStatusEl.textContent = SCREENSHOT_STATUS_TEXT[this.screenshotState];
+    this.screenshotStatusEl.dataset.state = this.screenshotState;
   }
 
   private openComposer(): void {
@@ -219,6 +298,13 @@ export class ReviewlyWidget {
     this.selectedContext = null;
     this.composerState = "idle";
     this.composerError = null;
+
+    // Cancelling/closing never uploads — the blob is simply dropped, and
+    // nothing was ever sent to the upload-authorization endpoint for it.
+    this.screenshotBlob = null;
+    this.screenshotContentType = null;
+    this.screenshotState = "idle";
+    this.screenshotStatusEl = null;
   }
 
   private renderComposer(): void {
@@ -247,6 +333,17 @@ export class ReviewlyWidget {
       target.textContent = `Selected: ${this.selectedContext.selector}`;
       panel.appendChild(target);
     }
+
+    const screenshotLabel = document.createElement("div");
+    screenshotLabel.className = "rw-composer-screenshot-label";
+    screenshotLabel.textContent = "Screenshot";
+    panel.appendChild(screenshotLabel);
+
+    const screenshotStatus = document.createElement("div");
+    screenshotStatus.className = "rw-composer-screenshot-status";
+    panel.appendChild(screenshotStatus);
+    this.screenshotStatusEl = screenshotStatus;
+    this.updateScreenshotStatusUI();
 
     const textareaId = "rw-composer-message";
     const label = document.createElement("label");
@@ -345,18 +442,53 @@ export class ReviewlyWidget {
   }
 
   async submitFeedback(message: string): Promise<void> {
+    const screenshotKey = await this.uploadCapturedScreenshot();
+
     const payload = buildFeedbackPayload({
       projectKey: this.projectKey,
       message,
       pageUrl: window.location.href,
       selector: this.selectedContext?.selector,
       elementText: this.selectedContext?.elementText,
+      screenshotKey,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       userAgent: navigator.userAgent,
     });
 
     await submitFeedback(this.apiBaseUrl, payload);
+  }
+
+  /**
+   * Uploads the already-captured screenshot (if any) at submit time, not
+   * at capture time — so cancelling the composer or pressing Escape
+   * never uploads anything. Any failure here (authorization or the PUT
+   * itself) is swallowed: feedback submission must still proceed with
+   * the user's typed message intact (see the Phase 2 report's "Upload
+   * failure behavior" section), just without a screenshot reference.
+   */
+  private async uploadCapturedScreenshot(): Promise<string | undefined> {
+    if (!this.screenshotBlob || !this.screenshotContentType) {
+      return undefined;
+    }
+
+    try {
+      const authorization = await requestUploadAuthorization(this.apiBaseUrl, {
+        projectKey: this.projectKey,
+        contentType: this.screenshotContentType,
+        fileSize: this.screenshotBlob.size,
+      });
+
+      await uploadScreenshot(authorization.uploadUrl, this.screenshotBlob, authorization.contentType);
+
+      return authorization.objectKey;
+    } catch (error) {
+      this.logDevError(
+        "Reviewly widget: screenshot upload failed; submitting feedback without it",
+        error,
+      );
+      return undefined;
+    }
   }
 
   private logDevError(message: string, error: unknown): void {
