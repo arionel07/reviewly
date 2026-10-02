@@ -6,8 +6,8 @@ const ALLOWED_PAGE_URL_PROTOCOLS = new Set(["http:", "https:"]);
 
 /**
  * Fields a workspace member fills in when creating feedback manually.
- * Low-level, browser-captured context (selector, viewport, userAgent,
- * screenshotUrl) is intentionally absent here — see
+ * Low-level, browser-captured context (selector, elementText, viewport,
+ * userAgent, screenshotKey) is intentionally absent here — see
  * src/db/schema/feedback.ts — those only ever come from the widget and
  * aren't meaningful to type by hand. Create and edit share this schema:
  * the same fields are editable in both, since none of them represent

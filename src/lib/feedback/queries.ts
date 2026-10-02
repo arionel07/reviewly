@@ -12,7 +12,8 @@ const feedbackColumns = {
   status: feedback.status,
   pageUrl: feedback.pageUrl,
   selector: feedback.selector,
-  screenshotUrl: feedback.screenshotUrl,
+  elementText: feedback.elementText,
+  screenshotKey: feedback.screenshotKey,
   viewportWidth: feedback.viewportWidth,
   viewportHeight: feedback.viewportHeight,
   userAgent: feedback.userAgent,
@@ -118,6 +119,8 @@ export async function insertFeedback(
   projectId: string,
   data: FeedbackWriteInput & {
     selector?: string;
+    elementText?: string;
+    screenshotKey?: string;
     viewportWidth?: number;
     viewportHeight?: number;
     userAgent?: string;
@@ -132,6 +135,8 @@ export async function insertFeedback(
       authorName: data.authorName ?? null,
       authorEmail: data.authorEmail ?? null,
       selector: data.selector ?? null,
+      elementText: data.elementText ?? null,
+      screenshotKey: data.screenshotKey ?? null,
       viewportWidth: data.viewportWidth ?? null,
       viewportHeight: data.viewportHeight ?? null,
       userAgent: data.userAgent ?? null,

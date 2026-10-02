@@ -18,6 +18,7 @@ export async function getProjectByPublicKey(publicKey: string) {
   const [project] = await db
     .select({
       id: projects.id,
+      organizationId: projects.organizationId,
       name: projects.name,
       websiteUrl: projects.websiteUrl,
       status: projects.status,

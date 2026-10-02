@@ -114,7 +114,8 @@ A single piece of visual feedback left on a project.
 | `status` | `feedback_status` enum | default `"open"`, not null |
 | `pageUrl` | `text` | not null — the page the feedback was left on |
 | `selector` | `text` | nullable — selector of the selected element |
-| `screenshotUrl` | `text` | nullable — reference to the captured screenshot |
+| `elementText` | `text` | nullable — a short snippet of the selected element's visible text/label, captured at submission time (see Widget Phase 2 report); useful context if the selector later goes stale |
+| `screenshotKey` | `text` | nullable — the R2 object key for the captured viewport screenshot, not a URL (see "Screenshot storage" below) |
 | `viewportWidth` / `viewportHeight` | `integer` | nullable |
 | `userAgent` | `text` | nullable |
 | `authorName` / `authorEmail` | `text` | nullable — the client leaving feedback is not required to have a `user` account |
@@ -130,6 +131,20 @@ piece of feedback. It deliberately does not encode client approval —
 approval/review state is a separate concern from the feedback workflow
 (see ADR-010 in `DECISIONS.md`) and is not represented as a schema column
 today.
+
+**Screenshot storage (Widget Phase 2):** `feedback.screenshotKey` stores an
+R2 object key, not a URL — the original `screenshotUrl` column (present
+from Phase 1's schema but never populated, since no screenshot capture
+code existed yet) was dropped and replaced rather than reused, because
+screenshots are stored as **private** R2 objects. A private object has no
+stable public URL to persist; only a signed, short-lived GET URL, which
+this schema deliberately does not store (see the Widget Phase 2 report's
+"R2 storage model" and "Image security" sections). The Feedback detail
+page resolves `screenshotKey` to a signed URL on render, after re-checking
+tenant ownership, rather than ever persisting that signed URL. Because no
+row had `screenshotUrl` populated at the time of this change, the
+migration drops and re-adds the column rather than performing a true SQL
+rename — there was no data to preserve.
 
 ### `feedback_comment` (`src/db/schema/feedback-comments.ts`)
 

@@ -8,6 +8,20 @@
       "when": 1790861970614,
       "tag": "0000_romantic_lester",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790922678018,
+      "tag": "0001_elite_the_executioner",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790922688882,
+      "tag": "0002_calm_roulette",
+      "breakpoints": true
     }
   ]
 }
