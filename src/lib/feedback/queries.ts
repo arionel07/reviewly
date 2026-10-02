@@ -103,9 +103,51 @@ type FeedbackWriteInput = {
 };
 
 /**
+ * The one place a feedback row actually gets inserted — shared by manual
+ * creation (createFeedback, below) and the widget's Route Handler
+ * (src/app/api/widget/feedback/route.ts), per the task's "Manual Server
+ * Action / Widget Route Handler both feed into the Feedback domain"
+ * architecture. It trusts `projectId` completely and never takes a
+ * status, organizationId, or authorUserId from its caller's data —
+ * status always starts at the column default ("open"); callers are
+ * responsible for having already authorized the write (an org-scoped
+ * getProject check for the manual path, a publicKey + origin check for
+ * the widget path) before calling this.
+ */
+export async function insertFeedback(
+  projectId: string,
+  data: FeedbackWriteInput & {
+    selector?: string;
+    viewportWidth?: number;
+    viewportHeight?: number;
+    userAgent?: string;
+  },
+) {
+  const [created] = await db
+    .insert(feedback)
+    .values({
+      projectId,
+      message: data.message,
+      pageUrl: data.pageUrl,
+      authorName: data.authorName ?? null,
+      authorEmail: data.authorEmail ?? null,
+      selector: data.selector ?? null,
+      viewportWidth: data.viewportWidth ?? null,
+      viewportHeight: data.viewportHeight ?? null,
+      userAgent: data.userAgent ?? null,
+    })
+    .returning();
+
+  return created;
+}
+
+/**
  * Inserts feedback under a project, but only after confirming that
  * project belongs to the given organization — the project is the only
- * tenant anchor a brand-new feedback row has.
+ * tenant anchor a brand-new feedback row has. This is the manual-
+ * creation entry point; it only ever sets the user-authored fields the
+ * manual form collects (see insertFeedback for the shared primitive
+ * widget submissions also go through).
  */
 export async function createFeedback(
   projectId: string,
@@ -118,18 +160,7 @@ export async function createFeedback(
     return null;
   }
 
-  const [created] = await db
-    .insert(feedback)
-    .values({
-      projectId,
-      message: data.message,
-      pageUrl: data.pageUrl,
-      authorName: data.authorName ?? null,
-      authorEmail: data.authorEmail ?? null,
-    })
-    .returning();
-
-  return created;
+  return insertFeedback(projectId, data);
 }
 
 /**

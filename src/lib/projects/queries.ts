@@ -6,6 +6,30 @@ import { isUuid } from "@/lib/db/is-uuid";
 import type { ProjectStatus } from "@/lib/projects/schemas";
 
 /**
+ * Looks up a project by its public widget key — the only lookup in this
+ * module with no organizationId to scope by, because the widget runs on
+ * an external site with no authenticated session. The key itself is the
+ * tenant boundary here: it's long, random, and unique per project (see
+ * src/lib/projects/public-key.ts), so resolving by it is the widget's
+ * entire authorization story before the origin check in
+ * src/lib/widget/origin.ts adds a second layer.
+ */
+export async function getProjectByPublicKey(publicKey: string) {
+  const [project] = await db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      websiteUrl: projects.websiteUrl,
+      status: projects.status,
+    })
+    .from(projects)
+    .where(eq(projects.publicKey, publicKey))
+    .limit(1);
+
+  return project ?? null;
+}
+
+/**
  * All projects in a workspace, newest-updated first, with just enough of
  * the owning client joined in to show which client each project belongs
  * to. `organizationId` must come from the caller's own authenticated

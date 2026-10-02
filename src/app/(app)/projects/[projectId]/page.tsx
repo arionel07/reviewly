@@ -6,12 +6,14 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { FeedbackStatusBadge } from "@/components/feedback/status-badge";
+import { CopySnippetButton } from "@/components/projects/copy-snippet-button";
 import { DeleteProjectDialog } from "@/components/projects/delete-project-dialog";
 import { ProjectStatusBadge } from "@/components/projects/status-badge";
 import { Button } from "@/components/ui/button";
 import { requireWorkspace } from "@/lib/auth/session";
 import { listFeedbackForProject } from "@/lib/feedback/queries";
 import { getProject } from "@/lib/projects/queries";
+import { getAppBaseUrl } from "@/lib/widget/app-url";
 
 const RECENT_FEEDBACK_LIMIT = 5;
 
@@ -38,6 +40,9 @@ export default async function ProjectDetailPage({
 
   const feedbackItems = await listFeedbackForProject(project.id, organizationId);
   const recentFeedback = feedbackItems.slice(0, RECENT_FEEDBACK_LIMIT);
+
+  const appBaseUrl = await getAppBaseUrl();
+  const installSnippet = `<script\n  src="${appBaseUrl}/widget/widget.js"\n  data-project-key="${project.publicKey}"\n></script>`;
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -85,6 +90,26 @@ export default async function ProjectDetailPage({
           <ProjectStatusBadge status={project.status} />
         </dd>
       </dl>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-foreground">Installation</h2>
+        <p className="max-w-lg text-sm text-muted-foreground">
+          Add this snippet before the closing{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">{"</body>"}</code> tag on{" "}
+          {project.websiteUrl} to collect feedback
+          {project.status === "active"
+            ? "."
+            : " (the project must be Active for the widget to accept submissions)."}
+        </p>
+        <div className="max-w-lg rounded-lg border border-border bg-muted/50">
+          <pre className="overflow-x-auto p-3 text-xs">
+            <code>{installSnippet}</code>
+          </pre>
+        </div>
+        <div>
+          <CopySnippetButton text={installSnippet} />
+        </div>
+      </div>
 
       <p className="text-xs text-muted-foreground">
         Created {format(project.createdAt, "MMM d, yyyy")}
