@@ -242,6 +242,81 @@ export async function deleteFeedback(
 }
 
 /**
+ * Feedback for a project, scoped only by projectId — no organizationId
+ * check. This exists for the public review portal (src/lib/review/*),
+ * where a valid review access token already proves the right to read
+ * this specific project; it is never a substitute for that check, and
+ * must never be called from a path that only has a bare, unauthenticated
+ * projectId. The authenticated dashboard uses listFeedbackForProject
+ * (above), not this.
+ */
+export async function listFeedbackForProjectUnchecked(
+  projectId: string,
+  status?: FeedbackStatus,
+) {
+  const conditions = [eq(feedback.projectId, projectId)];
+
+  if (status) {
+    conditions.push(eq(feedback.status, status));
+  }
+
+  return db
+    .select(feedbackColumns)
+    .from(feedback)
+    .where(and(...conditions))
+    .orderBy(desc(feedback.createdAt));
+}
+
+/**
+ * A single feedback row, scoped only by projectId — the review-portal
+ * counterpart to findFeedbackScoped's organization-scoped lookup. Still
+ * requires feedbackId to actually belong to projectId (never trusts
+ * feedbackId alone), but the caller is responsible for having already
+ * established the right to read that project (a valid review token).
+ */
+export async function getFeedbackInProject(feedbackId: string, projectId: string) {
+  if (!isUuid(feedbackId) || !isUuid(projectId)) {
+    return null;
+  }
+
+  const [row] = await db
+    .select(feedbackColumns)
+    .from(feedback)
+    .where(and(eq(feedback.id, feedbackId), eq(feedback.projectId, projectId)))
+    .limit(1);
+
+  return row ?? null;
+}
+
+/**
+ * Transitions feedback status within a project the caller has already
+ * proven access to (a review token), rather than an organization. Does
+ * not itself decide which transitions are allowed — callers (see
+ * src/lib/review/actions.ts) must check canTransitionFeedbackStatus
+ * (and, for the public portal, restrict further to resolved→reopened
+ * only) before calling this.
+ */
+export async function updateFeedbackStatusInProject(
+  feedbackId: string,
+  projectId: string,
+  status: FeedbackStatus,
+) {
+  const existing = await getFeedbackInProject(feedbackId, projectId);
+
+  if (!existing) {
+    return null;
+  }
+
+  const [updated] = await db
+    .update(feedback)
+    .set({ status })
+    .where(eq(feedback.id, feedbackId))
+    .returning();
+
+  return updated ?? null;
+}
+
+/**
  * Comments for a piece of feedback, with the authoring user's name
  * joined in (a left join: authorUserId is nullable and set null if the
  * user is later deleted, per src/db/schema/feedback-comments.ts).
@@ -295,6 +370,53 @@ export async function createFeedbackComment(
   const [created] = await db
     .insert(feedbackComments)
     .values({ feedbackId, authorUserId, body })
+    .returning();
+
+  return created;
+}
+
+/**
+ * The review-portal counterpart to listFeedbackComments — scoped only
+ * by feedbackId, no organization check. The caller (src/lib/review/*)
+ * must have already resolved feedbackId through getFeedbackInProject
+ * within a token-authorized project before calling this.
+ */
+export async function listFeedbackCommentsUnchecked(feedbackId: string) {
+  return db
+    .select({
+      id: feedbackComments.id,
+      body: feedbackComments.body,
+      authorName: feedbackComments.authorName,
+      authorEmail: feedbackComments.authorEmail,
+      authorUserName: user.name,
+      createdAt: feedbackComments.createdAt,
+    })
+    .from(feedbackComments)
+    .leftJoin(user, eq(feedbackComments.authorUserId, user.id))
+    .where(eq(feedbackComments.feedbackId, feedbackId))
+    .orderBy(feedbackComments.createdAt);
+}
+
+/**
+ * Adds a comment as an anonymous review-portal client — never an
+ * authorUserId (the client has no account; see AGENTS.md's "Client
+ * Portal Principles"). The caller must have already resolved
+ * feedbackId through getFeedbackInProject within a token-authorized
+ * project; this trusts feedbackId completely, the same way
+ * insertFeedback trusts projectId.
+ */
+export async function createAnonymousFeedbackComment(
+  feedbackId: string,
+  data: { authorName: string; authorEmail?: string; body: string },
+) {
+  const [created] = await db
+    .insert(feedbackComments)
+    .values({
+      feedbackId,
+      authorName: data.authorName,
+      authorEmail: data.authorEmail ?? null,
+      body: data.body,
+    })
     .returning();
 
   return created;
