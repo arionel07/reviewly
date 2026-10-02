@@ -20,8 +20,18 @@ describe("buildFeedbackPayload", () => {
 
     expect(payload.selector).toBeUndefined();
     expect(payload.elementText).toBeUndefined();
+    expect(payload.screenshotKey).toBeUndefined();
     expect(payload.viewportWidth).toBeUndefined();
     expect(payload.userAgent).toBeUndefined();
+  });
+
+  it("includes screenshotKey when provided, unchanged", () => {
+    const payload = buildFeedbackPayload({
+      ...base,
+      screenshotKey: "workspaces/org/projects/proj/feedback/abc123.webp",
+    });
+
+    expect(payload.screenshotKey).toBe("workspaces/org/projects/proj/feedback/abc123.webp");
   });
 
   it("caps the message length", () => {

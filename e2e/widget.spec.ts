@@ -98,6 +98,17 @@ test.describe("widget", () => {
     await expect(composer).toBeVisible();
     await expect(composer.locator(".rw-composer-target")).toContainText("signup-button");
 
+    // Capture itself succeeds here (real html2canvas, lazily loaded) —
+    // the status line reflects that immediately. Upload (which happens
+    // later, only at submit time) is a separate step: no R2 credentials
+    // exist in this test environment (see the Widget Phase 2 report's
+    // "Do not make E2E depend on production R2" note), so it silently
+    // fails and feedback still submits successfully without a
+    // screenshotKey — see the next assertions.
+    await expect(composer.locator(".rw-composer-screenshot-status")).toHaveText("✓ Captured", {
+      timeout: 5000,
+    });
+
     await composer.locator("textarea").fill("Make this button larger");
     await composer.getByRole("button", { name: "Send" }).click();
 
@@ -107,9 +118,23 @@ test.describe("widget", () => {
     await page.goto(`${projectUrl}/feedback`);
     await expect(page.getByText("Make this button larger")).toBeVisible();
     await expect(page.getByText("Open", { exact: true }).first()).toBeVisible();
+
+    await page.getByText("Make this button larger").click();
+    await expect(page.getByText("Element text")).toBeVisible();
+    // Upload failed (no R2 credentials in this environment), so no
+    // screenshotKey was ever persisted — the Screenshot section must not
+    // render, rather than rendering a broken image.
+    await expect(page.getByRole("heading", { name: "Screenshot" })).toHaveCount(0);
   });
 
-  test("Escape cancels inspect mode", async ({ page }) => {
+  test("Escape cancels inspect mode and never uploads", async ({ page }) => {
+    const uploadRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/widget/uploads")) {
+        uploadRequests.push(request.url());
+      }
+    });
+
     const publicKey = await seedActiveProjectPublicKey(page, "escape");
     await page.goto(`/widget-playground.html?projectKey=${publicKey}`);
 
@@ -119,9 +144,19 @@ test.describe("widget", () => {
 
     await page.keyboard.press("Escape");
     await expect(feedbackButton).toHaveText("Feedback");
+    await page.waitForTimeout(300);
+
+    expect(uploadRequests).toHaveLength(0);
   });
 
-  test("Cancel closes the composer", async ({ page }) => {
+  test("Cancel closes the composer and never uploads", async ({ page }) => {
+    const uploadRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/widget/uploads")) {
+        uploadRequests.push(request.url());
+      }
+    });
+
     const publicKey = await seedActiveProjectPublicKey(page, "cancel");
     await page.goto(`/widget-playground.html?projectKey=${publicKey}`);
 
@@ -131,8 +166,16 @@ test.describe("widget", () => {
     const composer = page.locator("reviewly-widget").locator(".rw-composer");
     await expect(composer).toBeVisible();
 
+    // Give capture a moment to run before cancelling — the point of this
+    // test is that even a successful capture is never uploaded once the
+    // composer is cancelled, not that capture never started.
+    await page.waitForTimeout(500);
+
     await composer.getByRole("button", { name: "Cancel" }).click();
     await expect(composer).toBeHidden();
+    await page.waitForTimeout(300);
+
+    expect(uploadRequests).toHaveLength(0);
   });
 
   test("clicking the widget's own button does not select it as feedback target", async ({
@@ -150,6 +193,32 @@ test.describe("widget", () => {
 
     await expect(feedbackButton).toHaveText("Feedback");
     await expect(page.locator("reviewly-widget").locator(".rw-composer")).toHaveCount(0);
+  });
+
+  test("screenshot capture failure still permits submitting feedback", async ({ page }) => {
+    const publicKey = await seedActiveProjectPublicKey(page, "capture-fail");
+
+    // Block the lazily-loaded screenshot library itself, simulating a
+    // capture-level failure (not just an upload failure) — the message
+    // the user typed must not be lost, and submission must still work.
+    await page.route("**/widget/html2canvas.min.js", (route) => route.abort());
+
+    await page.goto(`/widget-playground.html?projectKey=${publicKey}`);
+
+    await page.locator("reviewly-widget").locator("button.rw-button").click();
+    await page.locator("#signup-button").click();
+
+    const composer = page.locator("reviewly-widget").locator(".rw-composer");
+    await expect(composer).toBeVisible();
+    await expect(composer.locator(".rw-composer-screenshot-status")).toHaveText(
+      "Screenshot unavailable — feedback can still be sent.",
+      { timeout: 5000 },
+    );
+
+    await composer.locator("textarea").fill("Still works without a screenshot");
+    await composer.getByRole("button", { name: "Send" }).click();
+
+    await expect(composer.locator(".rw-composer-success")).toHaveText("Feedback sent");
   });
 
   test("a duplicate embed script does not create a second widget", async ({ page }) => {

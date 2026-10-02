@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { publicKeySchema, widgetFeedbackSchema } from "./schemas";
+import {
+  publicKeySchema,
+  widgetFeedbackSchema,
+  widgetUploadAuthorizationSchema,
+} from "./schemas";
 
 describe("publicKeySchema", () => {
   it("accepts a well-formed key", () => {
@@ -100,5 +104,105 @@ describe("widgetFeedbackSchema", () => {
     expect(result.data).not.toHaveProperty("projectId");
     expect(result.data).not.toHaveProperty("authorUserId");
     expect(result.data).not.toHaveProperty("screenshotUrl");
+  });
+
+  describe("screenshotKey", () => {
+    const validKey =
+      "workspaces/org_abc/projects/00000000-0000-0000-0000-000000000000/feedback/abcDEF123-_.webp";
+
+    it("accepts a well-formed server-generated key", () => {
+      expect(
+        widgetFeedbackSchema.safeParse({ ...base, screenshotKey: validKey }).success,
+      ).toBe(true);
+    });
+
+    it("accepts a png key", () => {
+      expect(
+        widgetFeedbackSchema.safeParse({
+          ...base,
+          screenshotKey: validKey.replace(".webp", ".png"),
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects a key with an unexpected extension", () => {
+      expect(
+        widgetFeedbackSchema.safeParse({
+          ...base,
+          screenshotKey: validKey.replace(".webp", ".svg"),
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects a handwritten/arbitrary path", () => {
+      expect(
+        widgetFeedbackSchema.safeParse({ ...base, screenshotKey: "../../etc/passwd" }).success,
+      ).toBe(false);
+    });
+
+    it("rejects a key missing the workspaces/ prefix", () => {
+      expect(
+        widgetFeedbackSchema.safeParse({
+          ...base,
+          screenshotKey: "projects/x/feedback/abc.webp",
+        }).success,
+      ).toBe(false);
+    });
+
+    it("is optional", () => {
+      expect(widgetFeedbackSchema.safeParse(base).success).toBe(true);
+    });
+  });
+});
+
+describe("widgetUploadAuthorizationSchema", () => {
+  const base = {
+    projectKey: "pk_abc123",
+    contentType: "image/webp",
+    fileSize: 50_000,
+  };
+
+  it("accepts a well-formed request", () => {
+    expect(widgetUploadAuthorizationSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("accepts image/png", () => {
+    expect(
+      widgetUploadAuthorizationSchema.safeParse({ ...base, contentType: "image/png" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unsupported content type", () => {
+    expect(
+      widgetUploadAuthorizationSchema.safeParse({ ...base, contentType: "image/svg+xml" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-image content type", () => {
+    expect(
+      widgetUploadAuthorizationSchema.safeParse({ ...base, contentType: "text/html" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a file size over the ceiling", () => {
+    expect(
+      widgetUploadAuthorizationSchema.safeParse({ ...base, fileSize: 10_000_000 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a zero or negative file size", () => {
+    expect(widgetUploadAuthorizationSchema.safeParse({ ...base, fileSize: 0 }).success).toBe(
+      false,
+    );
+    expect(widgetUploadAuthorizationSchema.safeParse({ ...base, fileSize: -1 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects an invalid project key", () => {
+    expect(
+      widgetUploadAuthorizationSchema.safeParse({ ...base, projectKey: "not-a-key" }).success,
+    ).toBe(false);
   });
 });
