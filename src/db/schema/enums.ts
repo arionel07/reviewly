@@ -13,3 +13,9 @@ export const feedbackStatusEnum = pgEnum("feedback_status", [
   "resolved",
   "reopened",
 ]);
+
+export const projectReviewStatusEnum = pgEnum("project_review_status", [
+  "pending",
+  "changes_requested",
+  "approved",
+]);

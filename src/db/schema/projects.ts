@@ -5,6 +5,7 @@ import { organization } from "./auth";
 import { clients } from "./clients";
 import { projectStatusEnum } from "./enums";
 import { feedback } from "./feedback";
+import { projectReviews } from "./project-reviews";
 import { reviewAccessTokens } from "./review-access-tokens";
 
 export const projects = pgTable(
@@ -43,5 +44,6 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     references: [clients.id],
   }),
   feedback: many(feedback),
+  projectReviews: many(projectReviews),
   reviewAccessTokens: many(reviewAccessTokens),
 }));

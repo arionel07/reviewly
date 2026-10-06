@@ -11,7 +11,9 @@ import {
 import { canTransitionFeedbackStatus } from "@/lib/feedback/status";
 import {
   createReviewAccessToken,
+  decideProjectReviewByToken,
   findProjectByReviewToken,
+  requestProjectReview,
   revokeAllReviewTokens,
 } from "@/lib/review/queries";
 import { clientCommentSchema } from "@/lib/review/schemas";
@@ -53,6 +55,31 @@ export async function revokeReviewLinksAction(
   }
 
   revalidatePath(`/projects/${projectId}`);
+}
+
+type RequestProjectReviewActionResult = { error: string } | undefined;
+
+export async function requestProjectReviewAction(
+  projectId: string,
+): Promise<RequestProjectReviewActionResult> {
+  const { organizationId } = await requireWorkspace();
+  const result = await requestProjectReview(projectId, organizationId);
+
+  if ("error" in result) {
+    switch (result.error) {
+      case "not_found":
+        return { error: "This project could not be found." };
+      case "already_pending":
+        return { error: "This project already has a review in progress." };
+      case "blocking_feedback":
+        return {
+          error: `${result.blockingCount ?? 0} feedback items still need attention.`,
+        };
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects`);
 }
 
 type PortalActionResult = { error: string } | undefined;
@@ -128,4 +155,35 @@ export async function reopenFeedbackAction(
   revalidatePath(`/r/${rawToken}/feedback/${feedbackId}`);
   revalidatePath(`/r/${rawToken}`);
   revalidatePath(`/r/${rawToken}/feedback`);
+}
+
+async function decideProjectReviewAction(
+  rawToken: string,
+  status: "approved" | "changes_requested",
+): Promise<PortalActionResult> {
+  const result = await decideProjectReviewByToken(rawToken, status);
+
+  if ("error" in result) {
+    if (result.error === "invalid_token") {
+      return { error: "This review link is no longer available." };
+    }
+
+    if (result.error === "no_pending_review") {
+      return { error: "There is no review awaiting a client decision." };
+    }
+
+    return { error: "This review has already been decided." };
+  }
+
+  revalidatePath(`/r/${rawToken}`);
+  revalidatePath(`/r/${rawToken}/feedback`);
+  revalidatePath(`/projects/${result.project.id}`);
+}
+
+export async function approveProjectReviewAction(rawToken: string): Promise<PortalActionResult> {
+  return decideProjectReviewAction(rawToken, "approved");
+}
+
+export async function requestProjectChangesAction(rawToken: string): Promise<PortalActionResult> {
+  return decideProjectReviewAction(rawToken, "changes_requested");
 }

@@ -1,9 +1,13 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import { projects, reviewAccessTokens } from "@/db/schema";
+import { feedback, projectReviews, projects, reviewAccessTokens } from "@/db/schema";
 import { getFeedbackInProject } from "@/lib/feedback/queries";
 import { getProject } from "@/lib/projects/queries";
+import {
+  blockingFeedbackStatuses,
+  type ProjectReviewStatus,
+} from "@/lib/review/project-review";
 import {
   generateRawReviewToken,
   hashReviewToken,
@@ -11,6 +15,28 @@ import {
   isValidRawReviewTokenFormat,
 } from "@/lib/review/token";
 import { getFeedbackScreenshotUrl } from "@/lib/storage/screenshot-url";
+
+const projectReviewColumns = {
+  id: projectReviews.id,
+  projectId: projectReviews.projectId,
+  status: projectReviews.status,
+  requestedAt: projectReviews.requestedAt,
+  decidedAt: projectReviews.decidedAt,
+  decisionNote: projectReviews.decisionNote,
+  createdAt: projectReviews.createdAt,
+  updatedAt: projectReviews.updatedAt,
+};
+
+export type ProjectReview = {
+  id: string;
+  projectId: string;
+  status: ProjectReviewStatus;
+  requestedAt: Date;
+  decidedAt: Date | null;
+  decisionNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 /**
  * Creates a new review access token for a project, after confirming the
@@ -173,4 +199,212 @@ export async function getReviewFeedbackScreenshotUrl(
   }
 
   return getFeedbackScreenshotUrl(feedbackItem.screenshotKey);
+}
+
+/**
+ * Project-level review rounds are intentionally separate from both the
+ * project lifecycle and individual feedback statuses. These authenticated
+ * helpers verify project ownership before reading review history.
+ */
+export async function listProjectReviews(
+  projectId: string,
+  organizationId: string,
+): Promise<ProjectReview[]> {
+  const project = await getProject(projectId, organizationId);
+
+  if (!project) {
+    return [];
+  }
+
+  return db
+    .select(projectReviewColumns)
+    .from(projectReviews)
+    .where(eq(projectReviews.projectId, projectId))
+    .orderBy(desc(projectReviews.requestedAt), desc(projectReviews.createdAt));
+}
+
+/**
+ * Internal public-portal counterpart. The caller must have already resolved
+ * projectId from a valid review access token; it must never be called with a
+ * bare unauthenticated project id.
+ */
+export async function listProjectReviewsForAuthorizedProject(
+  projectId: string,
+): Promise<ProjectReview[]> {
+  return db
+    .select(projectReviewColumns)
+    .from(projectReviews)
+    .where(eq(projectReviews.projectId, projectId))
+    .orderBy(desc(projectReviews.requestedAt), desc(projectReviews.createdAt));
+}
+
+export async function getLatestProjectReview(
+  projectId: string,
+  organizationId: string,
+): Promise<ProjectReview | null> {
+  const project = await getProject(projectId, organizationId);
+
+  if (!project) {
+    return null;
+  }
+
+  return getLatestProjectReviewForAuthorizedProject(projectId);
+}
+
+export async function getLatestProjectReviewForAuthorizedProject(
+  projectId: string,
+): Promise<ProjectReview | null> {
+  const [review] = await db
+    .select(projectReviewColumns)
+    .from(projectReviews)
+    .where(eq(projectReviews.projectId, projectId))
+    .orderBy(desc(projectReviews.requestedAt), desc(projectReviews.createdAt))
+    .limit(1);
+
+  return review ?? null;
+}
+
+export async function getPendingProjectReview(
+  projectId: string,
+  organizationId: string,
+): Promise<ProjectReview | null> {
+  const project = await getProject(projectId, organizationId);
+
+  if (!project) {
+    return null;
+  }
+
+  return getPendingProjectReviewForAuthorizedProject(projectId);
+}
+
+export async function getPendingProjectReviewForAuthorizedProject(
+  projectId: string,
+): Promise<ProjectReview | null> {
+  const [review] = await db
+    .select(projectReviewColumns)
+    .from(projectReviews)
+    .where(and(eq(projectReviews.projectId, projectId), eq(projectReviews.status, "pending")))
+    .orderBy(desc(projectReviews.requestedAt), desc(projectReviews.createdAt))
+    .limit(1);
+
+  return review ?? null;
+}
+
+export async function getProjectReviewReadiness(
+  projectId: string,
+  organizationId: string,
+): Promise<{ ready: boolean; blockingCount: number } | null> {
+  const project = await getProject(projectId, organizationId);
+
+  if (!project) {
+    return null;
+  }
+
+  const [result] = await db
+    .select({ blockingCount: count() })
+    .from(feedback)
+    .where(
+      and(eq(feedback.projectId, projectId), inArray(feedback.status, blockingFeedbackStatuses)),
+    );
+
+  const blockingCount = Number(result?.blockingCount ?? 0);
+
+  return { ready: blockingCount === 0, blockingCount };
+}
+
+type RequestProjectReviewResult =
+  | { review: ProjectReview }
+  | { error: "not_found" | "already_pending" | "blocking_feedback"; blockingCount?: number };
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+}
+
+/**
+ * Creates a new immutable review round after tenant ownership and feedback
+ * readiness checks. The partial unique index is the final race-safe guard
+ * against two concurrent request-review submissions.
+ */
+export async function requestProjectReview(
+  projectId: string,
+  organizationId: string,
+): Promise<RequestProjectReviewResult> {
+  const project = await getProject(projectId, organizationId);
+
+  if (!project) {
+    return { error: "not_found" };
+  }
+
+  const pending = await getPendingProjectReviewForAuthorizedProject(projectId);
+
+  if (pending) {
+    return { error: "already_pending" };
+  }
+
+  const readiness = await getProjectReviewReadiness(projectId, organizationId);
+
+  if (!readiness) {
+    return { error: "not_found" };
+  }
+
+  if (!readiness.ready) {
+    return { error: "blocking_feedback", blockingCount: readiness.blockingCount };
+  }
+
+  try {
+    const [review] = await db
+      .insert(projectReviews)
+      .values({
+        projectId,
+        status: "pending",
+        requestedAt: new Date(),
+      })
+      .returning(projectReviewColumns);
+
+    return { review };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { error: "already_pending" };
+    }
+
+    throw error;
+  }
+}
+
+type PublicReviewDecisionResult =
+  | { project: ReviewPortalProject; review: ProjectReview }
+  | { error: "invalid_token" | "no_pending_review" | "already_decided" };
+
+/**
+ * Authorizes a public decision from the bearer token and performs a
+ * conditional update. The status predicate makes concurrent approve/request
+ * changes calls mutually exclusive even if both read the same pending row.
+ */
+export async function decideProjectReviewByToken(
+  rawToken: string,
+  status: Extract<ProjectReviewStatus, "approved" | "changes_requested">,
+): Promise<PublicReviewDecisionResult> {
+  const project = await findProjectByReviewToken(rawToken);
+
+  if (!project) {
+    return { error: "invalid_token" };
+  }
+
+  const pending = await getPendingProjectReviewForAuthorizedProject(project.id);
+
+  if (!pending) {
+    return { error: "no_pending_review" };
+  }
+
+  const [updated] = await db
+    .update(projectReviews)
+    .set({ status, decidedAt: new Date() })
+    .where(and(eq(projectReviews.id, pending.id), eq(projectReviews.status, "pending")))
+    .returning(projectReviewColumns);
+
+  if (!updated) {
+    return { error: "already_decided" };
+  }
+
+  return { project, review: updated };
 }

@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ReviewLinkUnavailable } from "@/components/review/review-link-unavailable";
+import { ProjectReviewDecision } from "@/components/review/project-review-decision";
 import { StatTile } from "@/components/review/stat-tile";
 import { FeedbackStatusBadge } from "@/components/feedback/status-badge";
 import { Button } from "@/components/ui/button";
 import { listFeedbackForProjectUnchecked } from "@/lib/feedback/queries";
-import { findProjectByReviewToken } from "@/lib/review/queries";
+import {
+  findProjectByReviewToken,
+  getLatestProjectReviewForAuthorizedProject,
+} from "@/lib/review/queries";
 
 const RECENT_FEEDBACK_LIMIT = 5;
 
@@ -26,7 +30,10 @@ export default async function ReviewProjectPage({
     return <ReviewLinkUnavailable />;
   }
 
-  const feedbackItems = await listFeedbackForProjectUnchecked(project.id);
+  const [feedbackItems, latestReview] = await Promise.all([
+    listFeedbackForProjectUnchecked(project.id),
+    getLatestProjectReviewForAuthorizedProject(project.id),
+  ]);
   const recentFeedback = feedbackItems.slice(0, RECENT_FEEDBACK_LIMIT);
 
   const counts = {
@@ -48,6 +55,14 @@ export default async function ReviewProjectPage({
           Open website
         </Button>
       </div>
+
+      {latestReview ? (
+        <ProjectReviewDecision
+          token={token}
+          status={latestReview.status}
+          decidedAt={latestReview.decidedAt}
+        />
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Open" value={counts.open} />
