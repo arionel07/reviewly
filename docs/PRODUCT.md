@@ -41,7 +41,9 @@ In practice, spelled out:
    viewport, and a screenshot.
 7. Agency receives the feedback in the dashboard.
 8. Agency fixes the issue and resolves the feedback.
-9. Client reviews the change and either approves it or reopens it.
+9. Agency requests a project review when no blocking feedback remains.
+10. Client reviews the project and either approves the round or requests changes.
+11. Agency addresses requested changes and starts another review round.
 
 This loop is central to the product. Features that do not serve it should
 not be added without reconsidering scope.
@@ -60,7 +62,8 @@ The MVP includes:
 - feedback statuses
 - client review links
 - screenshots and browser/page metadata captured with feedback
-- simple approvals (approve / reopen)
+- project-level approval review rounds
+- simple feedback reopen actions
 - email notifications
 
 ## Explicit non-goals
@@ -94,7 +97,7 @@ Reviewly serves two distinct audiences with two distinct surfaces:
 - **Client portal** — for clients accessing a project through a review link.
   Clients are not required to create an account for ordinary review flows.
   The client portal stays deliberately simple: open review → inspect
-  project → leave feedback → review changes → approve. Internal agency
+  project → leave feedback → review changes → approve or request changes. Internal agency
   complexity (billing, member management, other clients, etc.) is never
   exposed here.
 
@@ -132,11 +135,18 @@ user account. This keeps the client side of the product free of account
 creation friction while still allowing the agency to scope and revoke
 access per project.
 
+## Review rounds
+
+Project approval is represented by repeatable `ProjectReview` rows. Each
+request creates a new round with `pending`, `changes_requested`, or
+`approved` status. Decided rounds are immutable; feedback status and the
+project lifecycle remain separate. Review access tokens authorize the
+public portal but are not coupled to review-round creation.
+
 ## Future directions (only where already decided)
 
-- Review/approval state is expected to grow into a slightly richer concept
-  than a single reopen/approve flag, but no such system is implemented or
-  specified yet (see ADR-010).
+- Approval invalidation after feedback changes and richer decision metadata
+  are not specified yet.
 - Workspace membership (via Better Auth organizations) is the foundation
   for eventual multi-member agency accounts; role-based permissions beyond
   Better Auth's defaults are not yet defined.

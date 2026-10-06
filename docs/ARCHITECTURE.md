@@ -62,9 +62,9 @@ repository but is a separate, independently bundled artifact.
   - any endpoint the embeddable widget or an unauthenticated client needs
     to call over plain HTTP
 
-  Today the only Route Handler in the repository is Better Auth's catch-all
-  handler at `src/app/api/auth/[...all]/route.ts`; widget-facing endpoints
-  are architecturally decided but not yet implemented.
+  The repository also contains widget upload/feedback Route Handlers. The
+  client review portal uses server-rendered `/r/[token]` routes and Server
+  Actions; it does not introduce a separate public API or client session.
 
 - Server-rendered pages read the database directly through
   domain/query functions backed by Drizzle, rather than calling the app's
@@ -89,25 +89,24 @@ repository but is a separate, independently bundled artifact.
 - Written in **vanilla TypeScript** — it must not bundle or depend on
   React, so it stays lightweight and decoupled from the app's rendering
   runtime.
-- Uses (or is intended to use — see current implementation state below)
-  **Shadow DOM** to isolate its own UI from the host page's styles and DOM,
-  and `html2canvas` for in-browser screenshots.
+- Uses **Shadow DOM** to isolate its own UI from the host page's styles and
+  DOM, and `html2canvas` for in-browser screenshots.
 - Treated as an untrusted public client: it only carries a public project
   key (which identifies a project but grants no administrative access),
   and any endpoint it talks to must independently validate the project
   key/state, origin, payload shape (Zod), upload size, and rate limits.
 
-**Current implementation state:** the widget currently exists only as a
-minimal stub (`ReviewlyWidget` class that logs on init). Shadow DOM,
-element selection, screenshot capture, and the composer UI are decided
-architecture (per `AGENTS.md`) but not yet built.
+**Current implementation state:** the widget supports Shadow DOM UI,
+element selection, feedback composition, screenshot capture, presigned R2
+uploads, and feedback submission. The widget bundle is built separately
+from the Next.js application.
 
 ## Storage and outbound services
 
-- **Cloudflare R2** (S3-compatible) is the decided object storage target
-  for feedback screenshots and other uploaded files, accessed via
-  `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` (both already a
-  dependency). No storage integration code exists yet.
+- **Cloudflare R2** (S3-compatible) stores private feedback screenshots,
+  accessed via `@aws-sdk/client-s3` and
+  `@aws-sdk/s3-request-presigner`. The application stores object keys and
+  signs short-lived URLs only after access checks.
 - **Resend** + **React Email** are the decided stack for transactional
   email (e.g. feedback notifications). Both are dependencies; no email
   sending code exists yet.
@@ -128,8 +127,8 @@ than being duplicated.
 - **Playwright** for critical end-to-end workflows, in particular the
   widget → feedback → dashboard loop.
 
-No test suite exists yet beyond the default scaffolding from
-`create-next-app`.
+Vitest and Playwright cover domain logic, database scoping, widget flows,
+review tokens, the client review portal, and project review rounds.
 
 ## Explicitly out of scope
 

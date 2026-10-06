@@ -75,6 +75,37 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
     projectAInOrgB = createdB.id;
   });
 
+  async function createFreshProject(organizationId: string, label: string) {
+    const client = await clientQueries.createClient(organizationId, {
+      name: `${label} Client`,
+    });
+    const project = await projectQueries.createProject(organizationId, {
+      name: label,
+      clientId: client.id,
+      websiteUrl: `https://${label.toLowerCase().replaceAll(" ", "-")}.example.com`,
+      status: "active",
+      publicKey: `pk_${randomUUID()}`,
+    });
+
+    return project.id;
+  }
+
+  async function addFeedbackWithStatus(
+    projectId: string,
+    status: "open" | "in_progress" | "resolved" | "reopened",
+  ) {
+    const item = await feedbackQueries.insertFeedback(projectId, {
+      message: `Feedback in ${status}`,
+      pageUrl: "https://example.com/",
+    });
+
+    if (status !== "open") {
+      await feedbackQueries.updateFeedbackStatusInProject(item.id, projectId, status);
+    }
+
+    return item;
+  }
+
   afterAll(async () => {
     await db.delete(schema.organization).where(inArray(schema.organization.id, [orgA, orgB]));
   });
@@ -277,6 +308,161 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
 
       const reopenResult = await reviewActions.reopenFeedbackAction(issued!.rawToken, feedbackItem.id);
       expect(reopenResult?.error).toBeDefined();
+    });
+  });
+
+  describe("project review rounds", () => {
+    it.each(["open", "in_progress", "reopened"] as const)(
+      "rejects a review request while %s feedback is blocking",
+      async (status) => {
+        const projectId = await createFreshProject(orgA, `Blocking ${status}`);
+        await addFeedbackWithStatus(projectId, status);
+
+        const result = await reviewQueries.requestProjectReview(projectId, orgA);
+
+        expect(result).toEqual({ error: "blocking_feedback", blockingCount: 1 });
+      },
+    );
+
+    it("allows a review request when all feedback is resolved", async () => {
+      const projectId = await createFreshProject(orgA, "Ready project");
+      await addFeedbackWithStatus(projectId, "resolved");
+
+      const result = await reviewQueries.requestProjectReview(projectId, orgA);
+
+      expect("review" in result && result.review.status).toBe("pending");
+      expect("review" in result && result.review.requestedAt).toBeInstanceOf(Date);
+    });
+
+    it("allows only one pending review per project", async () => {
+      const projectId = await createFreshProject(orgA, "Single pending project");
+
+      const first = await reviewQueries.requestProjectReview(projectId, orgA);
+      const second = await reviewQueries.requestProjectReview(projectId, orgA);
+
+      expect("review" in first).toBe(true);
+      expect(second).toEqual({ error: "already_pending" });
+    });
+
+    it("does not allow another workspace to request a review", async () => {
+      const projectId = await createFreshProject(orgA, "Tenant isolated project");
+
+      const result = await reviewQueries.requestProjectReview(projectId, orgB);
+
+      expect(result).toEqual({ error: "not_found" });
+    });
+
+    it("approves a pending review without changing feedback or project status", async () => {
+      const projectId = await createFreshProject(orgA, "Approval project");
+      const feedbackItem = await addFeedbackWithStatus(projectId, "resolved");
+      const requested = await reviewQueries.requestProjectReview(projectId, orgA);
+      const issued = await reviewQueries.createReviewAccessToken(projectId, orgA);
+
+      const result = await reviewActions.approveProjectReviewAction(issued!.rawToken);
+      const project = await projectQueries.getProject(projectId, orgA);
+      const feedback = await feedbackQueries.getFeedbackInProject(feedbackItem.id, projectId);
+      const latest = await reviewQueries.getLatestProjectReview(projectId, orgA);
+
+      expect(result).toBeUndefined();
+      expect("review" in requested && requested.review.status).toBe("pending");
+      expect(latest?.status).toBe("approved");
+      expect(latest?.decidedAt).toBeInstanceOf(Date);
+      expect(feedback?.status).toBe("resolved");
+      expect(project?.status).toBe("active");
+    });
+
+    it("rejects decisions for malformed, expired, and revoked tokens", async () => {
+      const projectId = await createFreshProject(orgA, "Token decision project");
+      const malformed = await reviewActions.approveProjectReviewAction("not-a-token");
+      expect(malformed?.error).toBeDefined();
+
+      await reviewQueries.requestProjectReview(projectId, orgA);
+      const revoked = await reviewQueries.createReviewAccessToken(projectId, orgA);
+      await reviewQueries.revokeAllReviewTokens(projectId, orgA);
+      const revokedResult = await reviewActions.approveProjectReviewAction(revoked!.rawToken);
+      expect(revokedResult?.error).toBeDefined();
+
+      const expiredProjectId = await createFreshProject(orgA, "Expired decision project");
+      await reviewQueries.requestProjectReview(expiredProjectId, orgA);
+      const rawToken = reviewToken.generateRawReviewToken();
+      const tokenHash = reviewToken.hashReviewToken(rawToken);
+      await db.insert(schema.reviewAccessTokens).values({
+        projectId: expiredProjectId,
+        tokenHash,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      const expiredResult = await reviewActions.approveProjectReviewAction(rawToken);
+      expect(expiredResult?.error).toBeDefined();
+    });
+
+    it("requests changes without mutating feedback", async () => {
+      const projectId = await createFreshProject(orgA, "Changes project");
+      const feedbackItem = await addFeedbackWithStatus(projectId, "resolved");
+      await reviewQueries.requestProjectReview(projectId, orgA);
+      const issued = await reviewQueries.createReviewAccessToken(projectId, orgA);
+
+      const result = await reviewActions.requestProjectChangesAction(issued!.rawToken);
+      const latest = await reviewQueries.getLatestProjectReview(projectId, orgA);
+      const feedback = await feedbackQueries.getFeedbackInProject(feedbackItem.id, projectId);
+
+      expect(result).toBeUndefined();
+      expect(latest?.status).toBe("changes_requested");
+      expect(latest?.decidedAt).toBeInstanceOf(Date);
+      expect(feedback?.status).toBe("resolved");
+    });
+
+    it("preserves multiple immutable review rounds", async () => {
+      const projectId = await createFreshProject(orgA, "Multiple rounds project");
+      await addFeedbackWithStatus(projectId, "resolved");
+      const issued = await reviewQueries.createReviewAccessToken(projectId, orgA);
+
+      await reviewQueries.requestProjectReview(projectId, orgA);
+      await reviewActions.requestProjectChangesAction(issued!.rawToken);
+      const decidedApprove = await reviewActions.approveProjectReviewAction(issued!.rawToken);
+      const decidedChanges = await reviewActions.requestProjectChangesAction(issued!.rawToken);
+      await reviewQueries.requestProjectReview(projectId, orgA);
+      await reviewActions.approveProjectReviewAction(issued!.rawToken);
+      const approvedChanges = await reviewActions.requestProjectChangesAction(issued!.rawToken);
+
+      const history = await reviewQueries.listProjectReviews(projectId, orgA);
+
+      expect(decidedApprove?.error).toBeDefined();
+      expect(decidedChanges?.error).toBeDefined();
+      expect(approvedChanges?.error).toBeDefined();
+      expect(history).toHaveLength(2);
+      expect(history.map((review) => review.status)).toEqual([
+        "approved",
+        "changes_requested",
+      ]);
+    });
+
+    it("allows only one concurrent final decision", async () => {
+      const projectId = await createFreshProject(orgA, "Concurrent decision project");
+      await addFeedbackWithStatus(projectId, "resolved");
+      await reviewQueries.requestProjectReview(projectId, orgA);
+      const issued = await reviewQueries.createReviewAccessToken(projectId, orgA);
+
+      const results = await Promise.all([
+        reviewActions.approveProjectReviewAction(issued!.rawToken),
+        reviewActions.requestProjectChangesAction(issued!.rawToken),
+      ]);
+
+      expect(results.filter((result) => result === undefined)).toHaveLength(1);
+      expect(results.filter((result) => result?.error)).toHaveLength(1);
+    });
+
+    it("cannot use a token for project A to decide project B's review", async () => {
+      const projectB = await createFreshProject(orgB, "Other project");
+      await addFeedbackWithStatus(projectB, "resolved");
+      await reviewQueries.requestProjectReview(projectB, orgB);
+
+      const tokenForA = await reviewQueries.createReviewAccessToken(projectA, orgA);
+      const result = await reviewActions.approveProjectReviewAction(tokenForA!.rawToken);
+      const reviewB = await reviewQueries.getPendingProjectReview(projectB, orgB);
+
+      expect(result?.error).toBeDefined();
+      expect(reviewB?.status).toBe("pending");
     });
   });
 });

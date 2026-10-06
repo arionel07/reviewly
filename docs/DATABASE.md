@@ -11,7 +11,7 @@ Two groups of tables exist side by side:
   `src/lib/auth/auth.ts` and should not be hand-edited.
 - **Business tables**, owned by Reviewly's product domain (`clients.ts`,
   `projects.ts`, `feedback.ts`, `feedback-comments.ts`,
-  `review-access-tokens.ts`).
+  `project-reviews.ts`, `review-access-tokens.ts`).
 
 ## Authentication tables (Better Auth)
 
@@ -193,13 +193,36 @@ token to the client once (e.g. embedded in the review link) → never
 persist it → store only its SHA-256 hash. This means a database
 compromise does not expose usable review-access tokens, the same
 reasoning used for `session.token`-style credentials elsewhere. Token
-generation/verification code is not implemented yet; this document
-describes the schema's intent, not an existing code path.
+generation/verification is implemented in `src/lib/review/token.ts` and
+`src/lib/review/queries.ts`. Newly generated tokens currently have no
+expiry by default; revocation remains the active agency control.
+
+### `project_review` (`src/db/schema/project-reviews.ts`)
+
+A project-level client approval round. It is intentionally separate from
+both `project.status` and `feedback.status`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` | primary key |
+| `projectId` | `uuid` | FK → `project.id`, `cascade`, not null |
+| `status` | `project_review_status` enum | `pending`, `changes_requested`, or `approved` |
+| `requestedAt` | `timestamp` | not null |
+| `decidedAt` | `timestamp` | nullable until the client decides |
+| `decisionNote` | `text` | nullable, reserved for future use |
+| `createdAt` / `updatedAt` | `timestamp` | as above |
+
+Indexes: `project_review_project_id_idx` and
+`project_review_project_requested_at_idx`. The partial unique index
+`project_review_one_pending_project_idx` enforces at most one pending round
+per project. Each new request creates a new row; decided rounds are not
+mutated into later rounds.
 
 ## Enums (`src/db/schema/enums.ts`)
 
 - `project_status`: `draft`, `active`, `completed`, `archived`.
 - `feedback_status`: `open`, `in_progress`, `resolved`, `reopened`.
+- `project_review_status`: `pending`, `changes_requested`, `approved`.
 
 ## Relations
 
@@ -212,9 +235,10 @@ foreign keys described here:
   `feedback_comment` (many, as optional author)
 - `client` ↔ `organization` (one), `project` (many)
 - `project` ↔ `organization` (one), `client` (one), `feedback` (many),
-  `review_access_token` (many)
+  `project_review` (many), `review_access_token` (many)
 - `feedback` ↔ `project` (one), `feedback_comment` (many)
 - `feedback_comment` ↔ `feedback` (one), `user` (one, nullable author)
+- `project_review` ↔ `project` (one)
 - `review_access_token` ↔ `project` (one)
 
 ## Delete behavior summary
@@ -234,6 +258,7 @@ foreign keys described here:
 | `feedback_comment.feedbackId → feedback.id` | cascade |
 | `feedback_comment.authorUserId → user.id` | **set null** |
 | `review_access_token.projectId → project.id` | cascade |
+| `project_review.projectId → project.id` | cascade |
 
 Deleting an `organization` (workspace) cascades all the way down to its
 clients, projects, feedback, and feedback comments, and its review access
@@ -253,11 +278,12 @@ organization
       → project (clientId, and organizationId directly)
           → feedback (projectId)
               → feedback_comment (feedbackId)
+          → project_review (projectId)
           → review_access_token (projectId)
 ```
 
 Any query or mutation against `client`, `project`, `feedback`,
-`feedback_comment`, or `review_access_token` must be scoped by the
+`feedback_comment`, `project_review`, or `review_access_token` must be scoped by the
 caller's organization membership before it touches the row — the schema
 provides the foreign keys and indexes to make that check cheap, but
 enforcing it is application-layer responsibility (see

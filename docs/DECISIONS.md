@@ -159,10 +159,8 @@ control.
 CSS cannot leak into the widget and the widget's own styles cannot leak
 onto the host page.
 
-**Consequences:** Widget components must be built/styled with Shadow DOM
-in mind (e.g. styles injected inside the shadow root). This is the decided
-approach; as noted in `ARCHITECTURE.md`, the Shadow DOM implementation
-itself is not yet built — the widget is currently a minimal stub.
+**Consequences:** Widget components are built and styled inside the shadow
+root, keeping host-page styles isolated from the widget UI.
 
 ---
 
@@ -183,8 +181,8 @@ server-side; only its hash is persisted and uniquely indexed.
 **Consequences:** Verifying a presented token requires hashing the
 incoming value and looking it up by hash rather than comparing raw
 strings. A lost/leaked database backup does not expose usable tokens.
-Token generation/verification code is not implemented yet — this decision
-is currently reflected only in the schema shape.
+The current portal revalidates the token on every public mutation; generated
+tokens have no default expiry and can be disabled by revocation.
 
 ---
 
@@ -200,13 +198,35 @@ conflating these two concerns into one column.
 **Decision:** `feedback.status` (the `feedback_status` enum) represents
 only the work-item workflow: `open → in_progress → resolved → reopened`.
 Client approval is treated as a separate concern that is not represented
-as a `feedback` column today. A dedicated approval/review model may be
-introduced later, but is explicitly out of scope until that decision is
-made.
+as a `feedback` column today. Project approval is modeled by the separate
+ProjectReview entity documented in ADR-011.
 
-**Consequences:** `reopened` is the mechanism by which client
-dissatisfaction currently feeds back into the workflow (a resolved item a
-client rejects becomes `reopened`), without the schema claiming to model
-"approved" as a first-class state. Building a richer approval system
-(e.g. a separate approval table/timeline) is future work, not implied by
-the current schema.
+**Consequences:** `reopened` remains the mechanism by which client
+dissatisfaction with a specific item feeds back into the workflow, while
+ProjectReview records project-level acceptance separately.
+
+---
+
+## ADR-011 — ProjectReview stores repeatable project-level review rounds
+
+**Status:** Accepted
+
+**Context:** Client approval applies to a project revision, not to one
+feedback item. A project may be reviewed more than once, and prior decisions
+must remain historically true.
+
+**Decision:** Store each agency Request review action as a new `ProjectReview`
+row. Its status is `pending`, `changes_requested`, or `approved`. A partial
+unique index allows no more than one pending round per project. Once decided,
+a round is immutable; a later request creates another row.
+
+`Project.status` remains the project lifecycle, `Feedback.status` remains the
+issue workflow, and `ReviewAccessToken` remains only the public authorization
+credential. Review decisions do not automatically mutate feedback or the
+project lifecycle.
+
+**Consequences:** Review history is queryable without reconstructing state
+from mutable project fields. The client can approve or request changes only
+through a valid project-scoped review token, while agency request actions are
+tenant-scoped. Future policy such as approval invalidation after later
+feedback changes is intentionally not part of Phase 1.

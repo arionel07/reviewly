@@ -5,6 +5,7 @@ import {
   createClient,
   createManualFeedback,
   createReviewLink,
+  requestProjectReview,
   resolveFeedback,
   signUpAndCreateWorkspace,
 } from "./helpers";
@@ -39,6 +40,29 @@ async function setUpProjectWithResolvedFeedback(page: Page, label: string) {
   await resolveFeedback(page, feedbackUrl);
 
   return { projectUrl, feedbackUrl };
+}
+
+async function setUpProjectWithOpenFeedback(page: Page, label: string) {
+  const suffix = `${label}-${Date.now()}`;
+
+  await signUpAndCreateWorkspace(page, {
+    name: "Agency Owner",
+    email: `review-${suffix}@example.com`,
+    workspaceName: `Review Workspace ${suffix}`,
+  });
+  await createClient(page, "Acme Inc.");
+  const { projectUrl } = await createActiveProject(page, {
+    name: "Acme Website",
+    clientName: "Acme Inc.",
+    websiteUrl: "https://acme.example.com",
+  });
+
+  await createManualFeedback(page, projectUrl, {
+    message: "The hero image is still being reviewed",
+    pageUrl: "https://acme.example.com/",
+  });
+
+  return { projectUrl };
 }
 
 test.describe("client review portal", () => {
@@ -124,5 +148,69 @@ test.describe("client review portal", () => {
     );
 
     await clientContext.close();
+  });
+
+  test("approve flow: client approves and agency sees the review history", async ({
+    page,
+    browser,
+  }) => {
+    const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "approve");
+    const reviewUrl = await createReviewLink(page, projectUrl);
+    await requestProjectReview(page, projectUrl);
+
+    const clientContext = await browser.newContext();
+    const clientPage = await clientContext.newPage();
+    await clientPage.goto(reviewUrl);
+
+    await expect(clientPage.getByText("Ready for review", { exact: true })).toBeVisible();
+    await clientPage.getByRole("button", { name: "Approve project", exact: true }).click();
+    await expect(clientPage.getByRole("heading", { name: "Approve project?" })).toBeVisible();
+    await clientPage.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(clientPage.getByRole("heading", { name: "Approved" })).toBeVisible();
+
+    await page.goto(projectUrl);
+    await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(page.getByText("Review history", { exact: true })).toBeVisible();
+    await clientContext.close();
+  });
+
+  test("changes requested creates a second round that can be approved", async ({
+    page,
+    browser,
+  }) => {
+    const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "rounds");
+    const reviewUrl = await createReviewLink(page, projectUrl);
+    await requestProjectReview(page, projectUrl);
+
+    const clientContext = await browser.newContext();
+    const clientPage = await clientContext.newPage();
+    await clientPage.goto(reviewUrl);
+    await clientPage.getByRole("button", { name: "Request changes", exact: true }).click();
+    await expect(clientPage.getByRole("heading", { name: "Request changes?" })).toBeVisible();
+    await clientPage
+      .getByRole("dialog")
+      .getByRole("button", { name: "Request changes", exact: true })
+      .click();
+    await expect(clientPage.getByRole("heading", { name: "Changes requested" })).toBeVisible();
+
+    await requestProjectReview(page, projectUrl);
+    await clientPage.reload();
+    await expect(clientPage.getByText("Ready for review", { exact: true })).toBeVisible();
+    await clientPage.getByRole("button", { name: "Approve project", exact: true }).click();
+    await clientPage.getByRole("dialog").getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(clientPage.getByRole("heading", { name: "Approved" })).toBeVisible();
+
+    await page.goto(projectUrl);
+    await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(page.getByText("Changes requested", { exact: true })).toBeVisible();
+    await clientContext.close();
+  });
+
+  test("readiness blocks requesting review while feedback is unresolved", async ({ page }) => {
+    const { projectUrl } = await setUpProjectWithOpenFeedback(page, "readiness");
+
+    await page.goto(projectUrl);
+    await expect(page.getByText("1 feedback item still needs attention.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Request review", exact: true })).toBeDisabled();
   });
 });
