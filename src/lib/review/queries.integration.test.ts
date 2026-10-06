@@ -351,6 +351,36 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
 
       expect("review" in result && result.review.status).toBe("pending");
       expect("review" in result && result.review.requestedAt).toBeInstanceOf(Date);
+      expect("rawToken" in result && result.rawToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(
+        "rawToken" in result && (await reviewQueries.findProjectByReviewToken(result.rawToken))?.id,
+      ).toBe(projectId);
+    });
+
+    it("rotates the current link when requesting review and when resending", async () => {
+      const projectId = await createFreshProject(orgA, "Rotating review project");
+      await addFeedbackWithStatus(projectId, "resolved");
+      const old = await reviewQueries.createReviewAccessToken(projectId, orgA);
+
+      const requested = await reviewQueries.requestProjectReview(projectId, orgA);
+      expect("review" in requested).toBe(true);
+      expect(await reviewQueries.findProjectByReviewToken(old!.rawToken)).toBeNull();
+      expect(
+        "rawToken" in requested && (await reviewQueries.findProjectByReviewToken(requested.rawToken))?.id,
+      ).toBe(projectId);
+
+      const historyBeforeResend = await reviewQueries.listProjectReviews(projectId, orgA);
+      const resent = await reviewQueries.rotatePendingProjectReviewToken(projectId, orgA);
+
+      expect("rawToken" in resent).toBe(true);
+      expect(historyBeforeResend).toHaveLength(1);
+      expect(
+        "rawToken" in requested && (await reviewQueries.findProjectByReviewToken(requested.rawToken)),
+      ).toBeNull();
+      expect(
+        "rawToken" in resent && (await reviewQueries.findProjectByReviewToken(resent.rawToken))?.id,
+      ).toBe(projectId);
+      expect(await reviewQueries.listProjectReviews(projectId, orgA)).toHaveLength(1);
     });
 
     it("allows only one pending review per project", async () => {
@@ -369,6 +399,16 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
       const result = await reviewQueries.requestProjectReview(projectId, orgB);
 
       expect(result).toEqual({ error: "not_found" });
+    });
+
+    it("does not allow another workspace to rotate a pending review link", async () => {
+      const projectId = await createFreshProject(orgA, "Tenant isolated resend project");
+      await addFeedbackWithStatus(projectId, "resolved");
+      await reviewQueries.requestProjectReview(projectId, orgA);
+
+      expect(await reviewQueries.rotatePendingProjectReviewToken(projectId, orgB)).toEqual({
+        error: "not_found",
+      });
     });
 
     it("approves a pending review without changing feedback or project status", async () => {

@@ -148,8 +148,22 @@ public portal but are not coupled to review-round creation.
 Important client activity appears inside the authenticated agency application:
 new widget feedback, anonymous comments, client reopens, and ProjectReview
 decisions. Notifications belong to the workspace, while read state belongs to
-each agency user. Email delivery is a separate future transport and is not
-part of Notifications Phase 1.
+each agency user. Email delivery is a separate transport added in Email
+Notifications Phase 2.
+
+## Transactional email
+
+Reviewly sends a small set of high-value transactional emails through Resend:
+
+- when an agency requests a review, the client receives the current secure
+  review link;
+- when a client approves or requests changes, current workspace members with
+  usable email addresses receive a decision email.
+
+Email is best-effort delivery around the existing review and notification
+operations. A review or decision remains valid when email delivery fails, and
+the agency receives explicit UI feedback. Email preferences, digests,
+marketing messages, and automatic retries are outside this phase.
 
 ## Future directions (only where already decided)
 

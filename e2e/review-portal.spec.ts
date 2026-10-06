@@ -155,8 +155,7 @@ test.describe("client review portal", () => {
     browser,
   }) => {
     const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "approve");
-    const reviewUrl = await createReviewLink(page, projectUrl);
-    await requestProjectReview(page, projectUrl);
+    const reviewUrl = await requestProjectReview(page, projectUrl);
 
     const clientContext = await browser.newContext();
     const clientPage = await clientContext.newPage();
@@ -186,8 +185,7 @@ test.describe("client review portal", () => {
     browser,
   }) => {
     const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "rounds");
-    const reviewUrl = await createReviewLink(page, projectUrl);
-    await requestProjectReview(page, projectUrl);
+    const reviewUrl = await requestProjectReview(page, projectUrl);
 
     const clientContext = await browser.newContext();
     const clientPage = await clientContext.newPage();
@@ -200,8 +198,8 @@ test.describe("client review portal", () => {
       .click();
     await expect(clientPage.getByRole("heading", { name: "Changes requested" })).toBeVisible();
 
-    await requestProjectReview(page, projectUrl);
-    await clientPage.reload();
+    const nextReviewUrl = await requestProjectReview(page, projectUrl);
+    await clientPage.goto(nextReviewUrl);
     await expect(clientPage.getByText("Ready for review", { exact: true })).toBeVisible();
     await clientPage.getByRole("button", { name: "Approve project", exact: true }).click();
     await clientPage.getByRole("dialog").getByRole("button", { name: "Approve", exact: true }).click();
@@ -211,6 +209,39 @@ test.describe("client review portal", () => {
     await expect(page.getByText("Approved", { exact: true })).toBeVisible();
     await expect(page.getByText("Changes requested", { exact: true })).toBeVisible();
     await clientContext.close();
+  });
+
+  test("resend rotates the token without creating another review round", async ({ page, browser }) => {
+    const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "resend");
+    const firstReviewUrl = await requestProjectReview(page, projectUrl);
+
+    await page.getByRole("button", { name: "Resend review link", exact: true }).click();
+    const linkLocator = page.locator("code", { hasText: "/r/" });
+    await expect(linkLocator).toBeVisible();
+    const secondReviewUrl = (await linkLocator.textContent())?.trim();
+    if (!secondReviewUrl) throw new Error("Could not read the resent review link.");
+    expect(secondReviewUrl).not.toBe(firstReviewUrl);
+
+    const clientContext = await browser.newContext();
+    const clientPage = await clientContext.newPage();
+    await clientPage.goto(firstReviewUrl);
+    await expect(clientPage.getByText("Review link unavailable")).toBeVisible();
+    await clientPage.goto(secondReviewUrl);
+    await expect(clientPage.getByText("Ready for review", { exact: true })).toBeVisible();
+    await clientContext.close();
+
+    await expect(page.getByText("Review history", { exact: true })).toHaveCount(0);
+  });
+
+  test("requesting review without client email still exposes a fresh copyable link", async ({
+    page,
+  }) => {
+    const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "missing-email");
+
+    const reviewUrl = await requestProjectReview(page, projectUrl);
+
+    await expect(page.getByText("No client email is configured.", { exact: true })).toBeVisible();
+    expect(reviewUrl).toMatch(/\/r\/[A-Za-z0-9_-]{43}$/);
   });
 
   test("readiness blocks requesting review while feedback is unresolved", async ({ page }) => {

@@ -88,9 +88,15 @@ export async function createReviewLink(page: Page, projectUrl: string): Promise<
   return url.trim();
 }
 
-/** Requests a new project-level client review round from the agency dashboard. */
-export async function requestProjectReview(page: Page, projectUrl: string) {
+/** Requests a new project-level client review round and returns its fresh link. */
+export async function requestProjectReview(page: Page, projectUrl: string): Promise<string> {
   await page.goto(projectUrl);
   await page.getByRole("button", { name: "Request review", exact: true }).click();
   await expect(page.getByText("In review", { exact: true })).toBeVisible();
+  const linkLocator = page.locator("code", { hasText: "/r/" });
+  await expect(linkLocator).toBeVisible();
+  const url = await linkLocator.textContent();
+
+  if (!url) throw new Error("Could not read the generated review link.");
+  return url.trim();
 }

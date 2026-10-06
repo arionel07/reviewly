@@ -107,11 +107,11 @@ from the Next.js application.
   accessed via `@aws-sdk/client-s3` and
   `@aws-sdk/s3-request-presigner`. The application stores object keys and
   signs short-lived URLs only after access checks.
-- **Resend** + **React Email** are the decided stack for transactional
-  email (e.g. feedback notifications). Both are dependencies; no email
-  sending code exists yet.
-- **Pino** is the decided logging library. No application logging code
-  exists yet.
+- **Resend** + **React Email** provide the focused transactional email
+  boundary. Email configuration is read lazily so missing local credentials do
+  not break unrelated routes.
+- **Pino** is used for server-side email delivery failures. Logs include event,
+  project, and organization context but never raw review tokens or URLs.
 
 ## Validation
 
@@ -232,3 +232,31 @@ scoped to the workspace, not to a recipient user. A separate
 reading an item does not mark it read for everyone else. The authenticated
 layout loads recent notifications and the current user's unread count for the
 header bell.
+
+### 5. Transactional review email flow
+
+Authenticated Request review performs the readiness and tenant checks, then a
+single PostgreSQL transaction revokes active project tokens, stores one fresh
+SHA-256 token hash, and creates the pending `ProjectReview`. The transaction
+commits before any Resend call is made:
+
+```
+Request review
+  → DB transaction: revoke tokens → insert token hash → insert ProjectReview
+  → commit
+  → construct /r/<raw-token> in memory
+  → attempt Resend delivery to Client.email
+```
+
+The raw token and complete URL are never persisted. A resend operation rotates
+the token for the existing pending review and does not create another review
+round. Manual link creation follows the same one-current-active-link rule.
+
+Client approval or requested changes first commit the ProjectReview update and
+the existing in-app Notification transaction, then attempt a best-effort email
+to current workspace members with non-empty email addresses. Email failure
+does not roll back either persisted business state or the in-app notification.
+
+There is intentionally no outbox, queue, retry worker, or delivery table in
+this MVP. A process crash after the DB commit and before the provider call can
+therefore leave email unsent while the in-app state remains correct.

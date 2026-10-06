@@ -237,9 +237,10 @@ feedback changes is intentionally not part of Phase 1.
 
 **Status:** Accepted
 
-**Context:** Client activity must be visible to agency members without
-introducing email, realtime delivery, recipient routing, or a generic event
-bus. A single read flag on a workspace notification would incorrectly mark
+**Context:** Client activity must be visible to agency members without making
+email delivery part of the Notifications Phase 1 persistence model. Realtime
+delivery, recipient routing, and a generic event bus were also out of scope.
+A single read flag on a workspace notification would incorrectly mark
 the item read for every member.
 
 **Decision:** Store notifications as workspace-scoped historical records.
@@ -253,3 +254,49 @@ count through organization-scoped queries.
 Notifications remain in-app only in Phase 1. Email is a separate future
 transport and no notification preferences, retention, deletion, or realtime
 delivery are introduced.
+
+---
+
+## ADR-013 — Review request owns current-link rotation and best-effort email
+
+**Status:** Accepted
+
+**Context:** A client must receive the raw review URL at the moment an agency
+requests a review, while the database must never store that raw credential.
+Keeping manual link creation and review requests independent would also allow
+multiple active links for one project.
+
+**Decision:** Request review atomically revokes active project tokens, creates
+one new hashed token, and creates the pending `ProjectReview`. The raw token is
+then used only in memory to construct the canonical `APP_URL/r/<token>` link
+for Resend and the one-time agency UI result. Manual link creation and
+resending a pending link use the same rotation rule; resending never creates a
+new review round. The review-link expiry policy remains unchanged and no new
+default expiry is introduced.
+
+**Consequences:** At most one current active review link is intended for a
+project. A failed email does not invalidate the newly created review or token;
+the UI reports the failure and offers a fresh-token resend. Because the raw
+URL is not recoverable from storage, a resend necessarily invalidates the
+previous link.
+
+---
+
+## ADR-014 — Transactional email is best-effort after commit
+
+**Status:** Accepted
+
+**Context:** Resend is external I/O and cannot participate atomically in the
+PostgreSQL transaction that owns review state and in-app notifications.
+
+**Decision:** Commit review/token/notification mutations first, then call the
+focused Resend + React Email boundary. Missing configuration, missing client
+email, and provider failures are represented as delivery results; provider
+failures are logged with Pino using only event, project, and organization
+context. Workspace decision recipients are resolved from current members at
+send time and deduplicated; no recipient or provider message is persisted.
+
+**Consequences:** Business state and in-app notifications remain reliable even
+when email delivery fails. There is a small accepted crash window between DB
+commit and the provider call because Phase 2 intentionally has no outbox,
+background queue, automatic retry, webhook processing, or delivery tracking.
