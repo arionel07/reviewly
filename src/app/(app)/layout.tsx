@@ -4,15 +4,21 @@ import { AppHeader } from "@/components/app-shell/app-header";
 import { AppSidebar } from "@/components/app-shell/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getWorkspace, listWorkspaces, requireWorkspace } from "@/lib/auth/session";
+import {
+  getUnreadNotificationCount,
+  listNotifications,
+} from "@/lib/notifications/queries";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Authoritative, server-side guard: redirects unauthenticated visitors to
   // /sign-in and authenticated-but-workspace-less visitors to /onboarding.
   const { user, organizationId } = await requireWorkspace();
 
-  const [activeWorkspace, organizations] = await Promise.all([
+  const [activeWorkspace, organizations, notifications, unreadNotificationCount] = await Promise.all([
     getWorkspace(organizationId),
     listWorkspaces(),
+    listNotifications(organizationId, user.id),
+    getUnreadNotificationCount(organizationId, user.id),
   ]);
 
   return (
@@ -26,7 +32,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         user={{ name: user.name, email: user.email }}
       />
       <SidebarInset>
-        <AppHeader />
+        <AppHeader
+          notifications={notifications.map((notification) => ({
+            ...notification,
+            createdAt: notification.createdAt.toISOString(),
+          }))}
+          unreadNotificationCount={unreadNotificationCount}
+        />
         <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </SidebarProvider>

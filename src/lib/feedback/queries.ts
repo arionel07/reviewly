@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { feedback, feedbackComments, projects, user } from "@/db/schema";
 import { isUuid } from "@/lib/db/is-uuid";
 import { getProject } from "@/lib/projects/queries";
+import { insertNotification } from "@/lib/notifications/queries";
 import type { FeedbackStatus } from "@/lib/feedback/status";
 
 const feedbackColumns = {
@@ -144,6 +145,55 @@ export async function insertFeedback(
     .returning();
 
   return created;
+}
+
+/**
+ * Widget-only feedback creation. The project has already been validated by
+ * the public-key/origin boundary; this transaction records the feedback and
+ * its workspace notification together.
+ */
+export async function insertWidgetFeedback(
+  organizationId: string,
+  projectId: string,
+  data: FeedbackWriteInput & {
+    selector?: string;
+    elementText?: string;
+    screenshotKey?: string;
+    viewportWidth?: number;
+    viewportHeight?: number;
+    userAgent?: string;
+  },
+) {
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(feedback)
+      .values({
+        projectId,
+        message: data.message,
+        pageUrl: data.pageUrl,
+        authorName: data.authorName ?? null,
+        authorEmail: data.authorEmail ?? null,
+        selector: data.selector ?? null,
+        elementText: data.elementText ?? null,
+        screenshotKey: data.screenshotKey ?? null,
+        viewportWidth: data.viewportWidth ?? null,
+        viewportHeight: data.viewportHeight ?? null,
+        userAgent: data.userAgent ?? null,
+      })
+      .returning();
+
+    await insertNotification(tx, {
+      organizationId,
+      type: "feedback_created",
+      projectId,
+      feedbackId: created.id,
+      projectReviewId: null,
+      title: "New feedback",
+      body: data.message,
+    });
+
+    return created;
+  });
 }
 
 /**
@@ -317,6 +367,47 @@ export async function updateFeedbackStatusInProject(
 }
 
 /**
+ * Public client reopen path. The conditional status predicate makes the
+ * transition race-safe, and the feedback update plus workspace notification
+ * commit together.
+ */
+export async function reopenFeedbackInProject(
+  feedbackId: string,
+  projectId: string,
+  organizationId: string,
+) {
+  const existing = await findFeedbackScoped(feedbackId, projectId, organizationId);
+
+  if (!existing || existing.status !== "resolved") {
+    return null;
+  }
+
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(feedback)
+      .set({ status: "reopened" })
+      .where(and(eq(feedback.id, feedbackId), eq(feedback.status, "resolved")))
+      .returning();
+
+    if (!updated) {
+      return null;
+    }
+
+    await insertNotification(tx, {
+      organizationId,
+      type: "feedback_reopened",
+      projectId,
+      feedbackId,
+      projectReviewId: null,
+      title: "Feedback reopened",
+      body: `"${updated.message}" was reopened by the client`,
+    });
+
+    return updated;
+  });
+}
+
+/**
  * Comments for a piece of feedback, with the authoring user's name
  * joined in (a left join: authorUserId is nullable and set null if the
  * user is later deleted, per src/db/schema/feedback-comments.ts).
@@ -402,22 +493,42 @@ export async function listFeedbackCommentsUnchecked(feedbackId: string) {
  * authorUserId (the client has no account; see AGENTS.md's "Client
  * Portal Principles"). The caller must have already resolved
  * feedbackId through getFeedbackInProject within a token-authorized
- * project; this trusts feedbackId completely, the same way
- * insertFeedback trusts projectId.
+ * project; it re-checks that feedback belongs to the supplied project and
+ * organization before writing.
  */
 export async function createAnonymousFeedbackComment(
   feedbackId: string,
+  projectId: string,
+  organizationId: string,
   data: { authorName: string; authorEmail?: string; body: string },
 ) {
-  const [created] = await db
-    .insert(feedbackComments)
-    .values({
-      feedbackId,
-      authorName: data.authorName,
-      authorEmail: data.authorEmail ?? null,
-      body: data.body,
-    })
-    .returning();
+  const owned = await findFeedbackScoped(feedbackId, projectId, organizationId);
 
-  return created;
+  if (!owned) {
+    return null;
+  }
+
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(feedbackComments)
+      .values({
+        feedbackId,
+        authorName: data.authorName,
+        authorEmail: data.authorEmail ?? null,
+        body: data.body,
+      })
+      .returning();
+
+    await insertNotification(tx, {
+      organizationId,
+      type: "feedback_commented",
+      projectId,
+      feedbackId,
+      projectReviewId: null,
+      title: "New client comment",
+      body: `A client commented on "${owned.message}"`,
+    });
+
+    return created;
+  });
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { insertFeedback } from "@/lib/feedback/queries";
+import { insertWidgetFeedback } from "@/lib/feedback/queries";
 import { getProjectByPublicKey } from "@/lib/projects/queries";
 import { widgetFeedbackRateLimiter, widgetRateLimitKey } from "@/lib/rate-limit/widget-limits";
 import { screenshotKeyBelongsToProject } from "@/lib/storage/screenshot-upload";
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         ? parsed.data.screenshotKey
         : undefined;
 
-    const created = await insertFeedback(project.id, {
+    const created = await insertWidgetFeedback(project.organizationId, project.id, {
       message: parsed.data.message,
       pageUrl: parsed.data.pageUrl,
       selector: parsed.data.selector,

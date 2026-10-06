@@ -15,6 +15,7 @@ import {
   isValidRawReviewTokenFormat,
 } from "@/lib/review/token";
 import { getFeedbackScreenshotUrl } from "@/lib/storage/screenshot-url";
+import { insertNotification } from "@/lib/notifications/queries";
 
 const projectReviewColumns = {
   id: projectReviews.id,
@@ -125,6 +126,7 @@ export async function revokeAllReviewTokens(
 
 export type ReviewPortalProject = {
   id: string;
+  organizationId: string;
   name: string;
   websiteUrl: string;
   status: "draft" | "active" | "completed" | "archived";
@@ -156,6 +158,7 @@ export async function findProjectByReviewToken(
       revokedAt: reviewAccessTokens.revokedAt,
       expiresAt: reviewAccessTokens.expiresAt,
       projectId: projects.id,
+      projectOrganizationId: projects.organizationId,
       projectName: projects.name,
       projectWebsiteUrl: projects.websiteUrl,
       projectStatus: projects.status,
@@ -171,6 +174,7 @@ export async function findProjectByReviewToken(
 
   return {
     id: row.projectId,
+    organizationId: row.projectOrganizationId,
     name: row.projectName,
     websiteUrl: row.projectWebsiteUrl,
     status: row.projectStatus,
@@ -396,11 +400,32 @@ export async function decideProjectReviewByToken(
     return { error: "no_pending_review" };
   }
 
-  const [updated] = await db
-    .update(projectReviews)
-    .set({ status, decidedAt: new Date() })
-    .where(and(eq(projectReviews.id, pending.id), eq(projectReviews.status, "pending")))
-    .returning(projectReviewColumns);
+  const updated = await db.transaction(async (tx) => {
+    const [review] = await tx
+      .update(projectReviews)
+      .set({ status, decidedAt: new Date() })
+      .where(and(eq(projectReviews.id, pending.id), eq(projectReviews.status, "pending")))
+      .returning(projectReviewColumns);
+
+    if (!review) {
+      return null;
+    }
+
+    const isApproval = status === "approved";
+    await insertNotification(tx, {
+      organizationId: project.organizationId,
+      type: isApproval ? "review_approved" : "review_changes_requested",
+      projectId: project.id,
+      feedbackId: null,
+      projectReviewId: review.id,
+      title: isApproval ? "Project approved" : "Changes requested",
+      body: isApproval
+        ? `The client approved "${project.name}"`
+        : `The client requested changes on "${project.name}"`,
+    });
+
+    return review;
+  });
 
   if (!updated) {
     return { error: "already_decided" };

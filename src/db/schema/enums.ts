@@ -19,3 +19,11 @@ export const projectReviewStatusEnum = pgEnum("project_review_status", [
   "changes_requested",
   "approved",
 ]);
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "feedback_created",
+  "feedback_commented",
+  "feedback_reopened",
+  "review_changes_requested",
+  "review_approved",
+]);

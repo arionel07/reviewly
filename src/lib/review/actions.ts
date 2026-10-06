@@ -6,7 +6,7 @@ import { requireWorkspace } from "@/lib/auth/session";
 import {
   createAnonymousFeedbackComment,
   getFeedbackInProject,
-  updateFeedbackStatusInProject,
+  reopenFeedbackInProject,
 } from "@/lib/feedback/queries";
 import { canTransitionFeedbackStatus } from "@/lib/feedback/status";
 import {
@@ -115,7 +115,16 @@ export async function submitClientCommentAction(
     return { error: "This feedback could not be found." };
   }
 
-  await createAnonymousFeedbackComment(feedbackId, parsed.data);
+  const created = await createAnonymousFeedbackComment(
+    feedbackId,
+    project.id,
+    project.organizationId,
+    parsed.data,
+  );
+
+  if (!created) {
+    return { error: "This feedback could not be found." };
+  }
 
   revalidatePath(`/r/${rawToken}/feedback/${feedbackId}`);
 }
@@ -150,7 +159,11 @@ export async function reopenFeedbackAction(
     return { error: "Only resolved feedback can be reopened." };
   }
 
-  await updateFeedbackStatusInProject(feedbackId, project.id, "reopened");
+  const reopened = await reopenFeedbackInProject(feedbackId, project.id, project.organizationId);
+
+  if (!reopened) {
+    return { error: "Only resolved feedback can be reopened." };
+  }
 
   revalidatePath(`/r/${rawToken}/feedback/${feedbackId}`);
   revalidatePath(`/r/${rawToken}`);
