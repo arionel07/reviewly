@@ -1,8 +1,16 @@
 import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import { feedback, projectReviews, projects, reviewAccessTokens } from "@/db/schema";
+import {
+  clients,
+  feedback,
+  organization,
+  projectReviews,
+  projects,
+  reviewAccessTokens,
+} from "@/db/schema";
 import { getFeedbackInProject } from "@/lib/feedback/queries";
+import { isUuid } from "@/lib/db/is-uuid";
 import { getProject } from "@/lib/projects/queries";
 import {
   blockingFeedbackStatuses,
@@ -39,6 +47,66 @@ export type ProjectReview = {
   updatedAt: Date;
 };
 
+type ReviewTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export type ProjectReviewRequestContext = {
+  projectId: string;
+  organizationId: string;
+  projectName: string;
+  clientName: string;
+  clientEmail: string | null;
+  organizationName: string;
+};
+
+async function getProjectReviewRequestContext(
+  projectId: string,
+  organizationId: string,
+): Promise<ProjectReviewRequestContext | null> {
+  if (!isUuid(projectId)) {
+    return null;
+  }
+
+  const [row] = await db
+    .select({
+      projectId: projects.id,
+      organizationId: projects.organizationId,
+      projectName: projects.name,
+      clientName: clients.name,
+      clientEmail: clients.email,
+      organizationName: organization.name,
+    })
+    .from(projects)
+    .innerJoin(clients, eq(projects.clientId, clients.id))
+    .innerJoin(organization, eq(projects.organizationId, organization.id))
+    .where(and(eq(projects.id, projectId), eq(projects.organizationId, organizationId)))
+    .limit(1);
+
+  return row ?? null;
+}
+
+async function insertFreshReviewAccessToken(
+  tx: ReviewTransaction,
+  projectId: string,
+): Promise<{ id: string; createdAt: Date; rawToken: string }> {
+  const now = new Date();
+
+  await tx
+    .update(reviewAccessTokens)
+    .set({ revokedAt: now })
+    .where(
+      and(eq(reviewAccessTokens.projectId, projectId), isNull(reviewAccessTokens.revokedAt)),
+    );
+
+  const rawToken = generateRawReviewToken();
+  const tokenHash = hashReviewToken(rawToken);
+  const [created] = await tx
+    .insert(reviewAccessTokens)
+    .values({ projectId, tokenHash })
+    .returning({ id: reviewAccessTokens.id, createdAt: reviewAccessTokens.createdAt });
+
+  return { ...created, rawToken };
+}
+
 /**
  * Creates a new review access token for a project, after confirming the
  * project belongs to the caller's own organization — the same
@@ -61,10 +129,21 @@ export async function createReviewAccessToken(
   const rawToken = generateRawReviewToken();
   const tokenHash = hashReviewToken(rawToken);
 
-  const [created] = await db
-    .insert(reviewAccessTokens)
-    .values({ projectId, tokenHash })
-    .returning({ id: reviewAccessTokens.id, createdAt: reviewAccessTokens.createdAt });
+  const created = await db.transaction(async (tx) => {
+    await tx
+      .update(reviewAccessTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(eq(reviewAccessTokens.projectId, projectId), isNull(reviewAccessTokens.revokedAt)),
+      );
+
+    const [token] = await tx
+      .insert(reviewAccessTokens)
+      .values({ projectId, tokenHash })
+      .returning({ id: reviewAccessTokens.id, createdAt: reviewAccessTokens.createdAt });
+
+    return token;
+  });
 
   return { rawToken, id: created.id, createdAt: created.createdAt };
 }
@@ -317,7 +396,11 @@ export async function getProjectReviewReadiness(
 }
 
 type RequestProjectReviewResult =
-  | { review: ProjectReview }
+  | {
+      review: ProjectReview;
+      rawToken: string;
+      context: ProjectReviewRequestContext;
+    }
   | { error: "not_found" | "already_pending" | "blocking_feedback"; blockingCount?: number };
 
 function isUniqueViolation(error: unknown): boolean {
@@ -333,9 +416,9 @@ export async function requestProjectReview(
   projectId: string,
   organizationId: string,
 ): Promise<RequestProjectReviewResult> {
-  const project = await getProject(projectId, organizationId);
+  const context = await getProjectReviewRequestContext(projectId, organizationId);
 
-  if (!project) {
+  if (!context) {
     return { error: "not_found" };
   }
 
@@ -356,16 +439,21 @@ export async function requestProjectReview(
   }
 
   try {
-    const [review] = await db
-      .insert(projectReviews)
-      .values({
-        projectId,
-        status: "pending",
-        requestedAt: new Date(),
-      })
-      .returning(projectReviewColumns);
+    const result = await db.transaction(async (tx) => {
+      const token = await insertFreshReviewAccessToken(tx, projectId);
+      const [review] = await tx
+        .insert(projectReviews)
+        .values({
+          projectId,
+          status: "pending",
+          requestedAt: new Date(),
+        })
+        .returning(projectReviewColumns);
 
-    return { review };
+      return { review, rawToken: token.rawToken };
+    });
+
+    return { ...result, context };
   } catch (error) {
     if (isUniqueViolation(error)) {
       return { error: "already_pending" };
@@ -373,6 +461,65 @@ export async function requestProjectReview(
 
     throw error;
   }
+}
+
+type RotatePendingReviewTokenResult =
+  | { rawToken: string; context: ProjectReviewRequestContext }
+  | { error: "not_found" | "no_pending_review" };
+
+/**
+ * Rotates access for an existing pending review without creating another
+ * ProjectReview row. The old raw token is intentionally not recoverable.
+ */
+export async function rotatePendingProjectReviewToken(
+  projectId: string,
+  organizationId: string,
+): Promise<RotatePendingReviewTokenResult> {
+  const context = await getProjectReviewRequestContext(projectId, organizationId);
+
+  if (!context) {
+    return { error: "not_found" };
+  }
+
+  const pending = await getPendingProjectReviewForAuthorizedProject(projectId);
+
+  if (!pending) {
+    return { error: "no_pending_review" };
+  }
+
+  const rawToken = generateRawReviewToken();
+
+  const rotated = await db.transaction(async (tx) => {
+    const [stillPending] = await tx
+      .select({ id: projectReviews.id })
+      .from(projectReviews)
+      .where(and(eq(projectReviews.id, pending.id), eq(projectReviews.status, "pending")))
+      .limit(1);
+
+    if (!stillPending) {
+      return false;
+    }
+
+    await tx
+      .update(reviewAccessTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(eq(reviewAccessTokens.projectId, projectId), isNull(reviewAccessTokens.revokedAt)),
+      );
+
+    await tx.insert(reviewAccessTokens).values({
+      projectId,
+      tokenHash: hashReviewToken(rawToken),
+    });
+
+    return true;
+  });
+
+  if (!rotated) {
+    return { error: "no_pending_review" };
+  }
+
+  return { rawToken, context };
 }
 
 type PublicReviewDecisionResult =

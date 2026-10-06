@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { buildAppUrl } from "@/lib/app-url";
 import { requireWorkspace } from "@/lib/auth/session";
 import {
   createAnonymousFeedbackComment,
@@ -14,10 +15,16 @@ import {
   decideProjectReviewByToken,
   findProjectByReviewToken,
   requestProjectReview,
+  rotatePendingProjectReviewToken,
   revokeAllReviewTokens,
 } from "@/lib/review/queries";
 import { clientCommentSchema } from "@/lib/review/schemas";
-import { getAppBaseUrl } from "@/lib/widget/app-url";
+import { getWorkspaceEmailRecipients } from "@/lib/email/recipients";
+import {
+  sendProjectDecisionEmail,
+  sendReviewRequestedEmail,
+} from "@/lib/email/send-email";
+import { logger } from "@/lib/logging/logger";
 
 type ReviewLinkActionResult = { url: string; rawToken: string } | { error: string };
 
@@ -37,10 +44,9 @@ export async function createReviewLinkAction(projectId: string): Promise<ReviewL
     return { error: "This project could not be found." };
   }
 
-  const appBaseUrl = await getAppBaseUrl();
   revalidatePath(`/projects/${projectId}`);
 
-  return { url: `${appBaseUrl}/r/${created.rawToken}`, rawToken: created.rawToken };
+  return { url: buildAppUrl(`/r/${created.rawToken}`), rawToken: created.rawToken };
 }
 
 export async function revokeReviewLinksAction(
@@ -57,7 +63,31 @@ export async function revokeReviewLinksAction(
   revalidatePath(`/projects/${projectId}`);
 }
 
-type RequestProjectReviewActionResult = { error: string } | undefined;
+type ReviewEmailStatus = "sent" | "no_client_email" | "failed";
+
+type ReviewDeliveryResult = {
+  reviewCreated: boolean;
+  emailSent: boolean;
+  emailStatus: ReviewEmailStatus;
+  reviewUrl: string;
+  clientEmail: string | null;
+};
+
+type RequestProjectReviewActionResult = { error: string } | ReviewDeliveryResult;
+
+function getReviewEmailStatus(result: Awaited<ReturnType<typeof sendReviewRequestedEmail>>): {
+  emailSent: boolean;
+  emailStatus: ReviewEmailStatus;
+} {
+  if (result.sent) {
+    return { emailSent: true, emailStatus: "sent" };
+  }
+
+  return {
+    emailSent: false,
+    emailStatus: result.reason === "no_recipient" ? "no_client_email" : "failed",
+  };
+}
 
 export async function requestProjectReviewAction(
   projectId: string,
@@ -78,8 +108,62 @@ export async function requestProjectReviewAction(
     }
   }
 
+  const reviewUrl = buildAppUrl(`/r/${result.rawToken}`);
+  const emailResult = await sendReviewRequestedEmail({
+    to: result.context.clientEmail,
+    projectId: result.context.projectId,
+    organizationId: result.context.organizationId,
+    projectName: result.context.projectName,
+    workspaceName: result.context.organizationName,
+    reviewUrl,
+  });
+  const delivery = getReviewEmailStatus(emailResult);
+
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects`);
+
+  return {
+    reviewCreated: true,
+    ...delivery,
+    reviewUrl,
+    clientEmail: result.context.clientEmail,
+  };
+}
+
+export async function resendProjectReviewLinkAction(
+  projectId: string,
+): Promise<{ error: string } | ReviewDeliveryResult> {
+  const { organizationId } = await requireWorkspace();
+  const result = await rotatePendingProjectReviewToken(projectId, organizationId);
+
+  if ("error" in result) {
+    return {
+      error:
+        result.error === "not_found"
+          ? "This project could not be found."
+          : "There is no review awaiting a client decision.",
+    };
+  }
+
+  const reviewUrl = buildAppUrl(`/r/${result.rawToken}`);
+  const emailResult = await sendReviewRequestedEmail({
+    to: result.context.clientEmail,
+    projectId: result.context.projectId,
+    organizationId: result.context.organizationId,
+    projectName: result.context.projectName,
+    workspaceName: result.context.organizationName,
+    reviewUrl,
+  });
+  const delivery = getReviewEmailStatus(emailResult);
+
+  revalidatePath(`/projects/${projectId}`);
+
+  return {
+    reviewCreated: false,
+    ...delivery,
+    reviewUrl,
+    clientEmail: result.context.clientEmail,
+  };
 }
 
 type PortalActionResult = { error: string } | undefined;
@@ -186,6 +270,27 @@ async function decideProjectReviewAction(
     }
 
     return { error: "This review has already been decided." };
+  }
+
+  try {
+    const recipients = await getWorkspaceEmailRecipients(result.project.organizationId);
+    await sendProjectDecisionEmail({
+      to: recipients,
+      projectId: result.project.id,
+      organizationId: result.project.organizationId,
+      projectName: result.project.name,
+      decision: status,
+    });
+  } catch {
+    logger.error(
+      {
+        eventType: status === "approved" ? "review_approved" : "review_changes_requested",
+        projectId: result.project.id,
+        organizationId: result.project.organizationId,
+        reason: "recipient_resolution_failed",
+      },
+      "Transactional email was not sent",
+    );
   }
 
   revalidatePath(`/r/${rawToken}`);
