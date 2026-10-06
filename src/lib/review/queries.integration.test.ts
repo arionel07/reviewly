@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // revalidatePath requires a Next.js request/render context that doesn't
@@ -236,6 +236,13 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
       expect(comments.some((comment) => comment.body === "Confirmed, still broken on my phone.")).toBe(
         true,
       );
+
+      const [notification] = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.feedbackId, feedbackItem.id));
+      expect(notification.type).toBe("feedback_commented");
+      expect(notification.title).toBe("New client comment");
     });
 
     it("a client comment cannot target another project's feedback", async () => {
@@ -273,6 +280,13 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
 
       const updated = await feedbackQueries.getFeedbackInProject(feedbackItem.id, projectA);
       expect(updated?.status).toBe("reopened");
+
+      const [notification] = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.feedbackId, feedbackItem.id));
+      expect(notification.type).toBe("feedback_reopened");
+      expect(notification.title).toBe("Feedback reopened");
     });
 
     it("rejects reopening feedback that isn't resolved", async () => {
@@ -287,6 +301,11 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
 
       const unchanged = await feedbackQueries.getFeedbackInProject(feedbackItem.id, projectA);
       expect(unchanged?.status).toBe("open");
+      const notifications = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.feedbackId, feedbackItem.id));
+      expect(notifications).toHaveLength(0);
     });
 
     it("a revoked token cannot comment or reopen", async () => {
@@ -362,6 +381,10 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
       const project = await projectQueries.getProject(projectId, orgA);
       const feedback = await feedbackQueries.getFeedbackInProject(feedbackItem.id, projectId);
       const latest = await reviewQueries.getLatestProjectReview(projectId, orgA);
+      const [notification] = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.projectReviewId, latest!.id));
 
       expect(result).toBeUndefined();
       expect("review" in requested && requested.review.status).toBe("pending");
@@ -369,6 +392,8 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
       expect(latest?.decidedAt).toBeInstanceOf(Date);
       expect(feedback?.status).toBe("resolved");
       expect(project?.status).toBe("active");
+      expect(notification.type).toBe("review_approved");
+      expect(notification.organizationId).toBe(orgA);
     });
 
     it("rejects decisions for malformed, expired, and revoked tokens", async () => {
@@ -405,11 +430,16 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
       const result = await reviewActions.requestProjectChangesAction(issued!.rawToken);
       const latest = await reviewQueries.getLatestProjectReview(projectId, orgA);
       const feedback = await feedbackQueries.getFeedbackInProject(feedbackItem.id, projectId);
+      const [notification] = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.projectReviewId, latest!.id));
 
       expect(result).toBeUndefined();
       expect(latest?.status).toBe("changes_requested");
       expect(latest?.decidedAt).toBeInstanceOf(Date);
       expect(feedback?.status).toBe("resolved");
+      expect(notification.type).toBe("review_changes_requested");
     });
 
     it("preserves multiple immutable review rounds", async () => {
@@ -419,6 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
 
       await reviewQueries.requestProjectReview(projectId, orgA);
       await reviewActions.requestProjectChangesAction(issued!.rawToken);
+      const firstRound = await reviewQueries.getLatestProjectReview(projectId, orgA);
       const decidedApprove = await reviewActions.approveProjectReviewAction(issued!.rawToken);
       const decidedChanges = await reviewActions.requestProjectChangesAction(issued!.rawToken);
       await reviewQueries.requestProjectReview(projectId, orgA);
@@ -426,6 +457,10 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
       const approvedChanges = await reviewActions.requestProjectChangesAction(issued!.rawToken);
 
       const history = await reviewQueries.listProjectReviews(projectId, orgA);
+      const notifications = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.projectId, projectId));
 
       expect(decidedApprove?.error).toBeDefined();
       expect(decidedChanges?.error).toBeDefined();
@@ -435,6 +470,8 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
         "approved",
         "changes_requested",
       ]);
+      expect(notifications).toHaveLength(2);
+      expect(notifications.map((notification) => notification.projectReviewId)).toContain(firstRound!.id);
     });
 
     it("allows only one concurrent final decision", async () => {

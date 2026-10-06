@@ -11,7 +11,7 @@ Two groups of tables exist side by side:
   `src/lib/auth/auth.ts` and should not be hand-edited.
 - **Business tables**, owned by Reviewly's product domain (`clients.ts`,
   `projects.ts`, `feedback.ts`, `feedback-comments.ts`,
-  `project-reviews.ts`, `review-access-tokens.ts`).
+  `project-reviews.ts`, `notifications.ts`, `review-access-tokens.ts`).
 
 ## Authentication tables (Better Auth)
 
@@ -218,11 +218,28 @@ Indexes: `project_review_project_id_idx` and
 per project. Each new request creates a new row; decided rounds are not
 mutated into later rounds.
 
+### `notification` and `notification_read` (`src/db/schema/notifications.ts`)
+
+`notification` stores workspace-wide client activity. It may point to a
+project, feedback item, and/or project review so the application can derive a
+safe internal destination without persisting arbitrary URLs.
+
+`notification_read` stores per-user read state. Its composite primary key
+`(notificationId, userId)` prevents duplicate markers; unread means no row
+exists for that user and notification. Both tables use cascade behavior for
+their owning organization/user/source records.
+
+The notification type enum is explicit: `feedback_created`,
+`feedback_commented`, `feedback_reopened`, `review_changes_requested`, and
+`review_approved`.
+
 ## Enums (`src/db/schema/enums.ts`)
 
 - `project_status`: `draft`, `active`, `completed`, `archived`.
 - `feedback_status`: `open`, `in_progress`, `resolved`, `reopened`.
 - `project_review_status`: `pending`, `changes_requested`, `approved`.
+- `notification_type`: `feedback_created`, `feedback_commented`,
+  `feedback_reopened`, `review_changes_requested`, `review_approved`.
 
 ## Relations
 
@@ -239,6 +256,9 @@ foreign keys described here:
 - `feedback` ↔ `project` (one), `feedback_comment` (many)
 - `feedback_comment` ↔ `feedback` (one), `user` (one, nullable author)
 - `project_review` ↔ `project` (one)
+- `notification` ↔ `organization`, `project`, `feedback`, `project_review`
+  (optional one), `notification_read` (many)
+- `notification_read` ↔ `notification`, `user` (one)
 - `review_access_token` ↔ `project` (one)
 
 ## Delete behavior summary
@@ -259,6 +279,12 @@ foreign keys described here:
 | `feedback_comment.authorUserId → user.id` | **set null** |
 | `review_access_token.projectId → project.id` | cascade |
 | `project_review.projectId → project.id` | cascade |
+| `notification.organizationId → organization.id` | cascade |
+| `notification.projectId → project.id` | cascade |
+| `notification.feedbackId → feedback.id` | cascade |
+| `notification.projectReviewId → project_review.id` | cascade |
+| `notification_read.notificationId → notification.id` | cascade |
+| `notification_read.userId → user.id` | cascade |
 
 Deleting an `organization` (workspace) cascades all the way down to its
 clients, projects, feedback, and feedback comments, and its review access
@@ -280,10 +306,13 @@ organization
               → feedback_comment (feedbackId)
           → project_review (projectId)
           → review_access_token (projectId)
+  → notification (organizationId)
+      → notification_read (notificationId)
 ```
 
 Any query or mutation against `client`, `project`, `feedback`,
-`feedback_comment`, `project_review`, or `review_access_token` must be scoped by the
+`feedback_comment`, `project_review`, `notification`, `notification_read`, or
+`review_access_token` must be scoped by the
 caller's organization membership before it touches the row — the schema
 provides the foreign keys and indexes to make that check cheap, but
 enforcing it is application-layer responsibility (see

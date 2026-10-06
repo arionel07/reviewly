@@ -169,6 +169,13 @@ test.describe("client review portal", () => {
     await expect(clientPage.getByRole("heading", { name: "Approved" })).toBeVisible();
 
     await page.goto(projectUrl);
+    const notificationBell = page.getByRole("button", { name: "Open notifications" });
+    await expect(notificationBell).toContainText("1");
+    await notificationBell.click();
+    await expect(page.getByText("Project approved", { exact: true })).toBeVisible();
+    await page.getByText("Project approved", { exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${projectUrl}$`));
+    await expect(notificationBell).not.toContainText("1");
     await expect(page.getByText("Approved", { exact: true })).toBeVisible();
     await expect(page.getByText("Review history", { exact: true })).toBeVisible();
     await clientContext.close();

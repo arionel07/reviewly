@@ -222,3 +222,13 @@ domain/service function → Drizzle → PostgreSQL
 The client never holds a Better Auth session; access is entirely scoped by
 the possession of a valid, unexpired, unrevoked review access token for
 that specific project.
+
+### 4. In-app notification flow
+
+Client-originated mutations create a historical notification in the same
+database transaction as the successful domain mutation. Notifications are
+scoped to the workspace, not to a recipient user. A separate
+`notification_read` row records each user's read state, so one agency member
+reading an item does not mark it read for everyone else. The authenticated
+layout loads recent notifications and the current user's unread count for the
+header bell.

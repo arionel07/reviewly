@@ -230,3 +230,26 @@ from mutable project fields. The client can approve or request changes only
 through a valid project-scoped review token, while agency request actions are
 tenant-scoped. Future policy such as approval invalidation after later
 feedback changes is intentionally not part of Phase 1.
+
+---
+
+## ADR-012 — Workspace notifications with per-user read state
+
+**Status:** Accepted
+
+**Context:** Client activity must be visible to agency members without
+introducing email, realtime delivery, recipient routing, or a generic event
+bus. A single read flag on a workspace notification would incorrectly mark
+the item read for every member.
+
+**Decision:** Store notifications as workspace-scoped historical records.
+Store read state separately in `notification_read`, keyed by
+`(notificationId, userId)`. Any workspace member can see recent activity, and
+each member's unread state is computed by the absence of their read marker.
+Mutation boundaries create notifications transactionally after the domain
+mutation succeeds. The header bell loads a bounded recent list and unread
+count through organization-scoped queries.
+
+Notifications remain in-app only in Phase 1. Email is a separate future
+transport and no notification preferences, retention, deletion, or realtime
+delivery are introduced.

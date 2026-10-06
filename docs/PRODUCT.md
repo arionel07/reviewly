@@ -64,7 +64,7 @@ The MVP includes:
 - screenshots and browser/page metadata captured with feedback
 - project-level approval review rounds
 - simple feedback reopen actions
-- email notifications
+- in-app notifications for important client activity
 
 ## Explicit non-goals
 
@@ -142,6 +142,14 @@ request creates a new round with `pending`, `changes_requested`, or
 `approved` status. Decided rounds are immutable; feedback status and the
 project lifecycle remain separate. Review access tokens authorize the
 public portal but are not coupled to review-round creation.
+
+## In-app notifications
+
+Important client activity appears inside the authenticated agency application:
+new widget feedback, anonymous comments, client reopens, and ProjectReview
+decisions. Notifications belong to the workspace, while read state belongs to
+each agency user. Email delivery is a separate future transport and is not
+part of Notifications Phase 1.
 
 ## Future directions (only where already decided)
 

@@ -66,6 +66,12 @@ test.describe("widget", () => {
     await expect(page.getByText("Make this button larger")).toBeVisible();
     await expect(page.getByText("Open", { exact: true }).first()).toBeVisible();
 
+    await page.getByRole("button", { name: "Open notifications" }).click();
+    await expect(page.getByText("New feedback", { exact: true })).toBeVisible();
+    await page.getByText("New feedback", { exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]+\/feedback\/[0-9a-f-]+$/);
+
+    await page.goto(`${projectUrl}/feedback`);
     await page.getByText("Make this button larger").click();
     await expect(page.getByText("Element text")).toBeVisible();
     // Upload failed (no R2 credentials in this environment), so no

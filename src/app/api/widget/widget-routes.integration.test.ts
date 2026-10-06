@@ -187,6 +187,16 @@ describe.skipIf(!process.env.DATABASE_URL)("widget Route Handlers (integration)"
       expect(created.status).toBe("open");
       expect(created.screenshotKey).toBe(screenshotKey);
       expect(created.elementText).toBe("Welcome to Acme");
+
+      const [notification] = await db
+        .select()
+        .from(schema.notifications)
+        .where(eq(schema.notifications.feedbackId, body.feedbackId));
+
+      expect(notification.type).toBe("feedback_created");
+      expect(notification.organizationId).toBe(organizationId);
+      expect(notification.projectId).toBe(activeProjectId);
+      expect(notification.title).toBe("New feedback");
     });
 
     it("silently drops a screenshotKey that belongs to a different project", async () => {
