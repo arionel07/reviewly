@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -56,31 +57,35 @@ export function UserMenu({
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top">
-        <DropdownMenuLabel>
-          <span className="flex flex-col">
-            <span className="truncate font-medium">{user.name}</span>
-            <span className="truncate text-xs text-muted-foreground">
-              {user.email}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <span className="flex flex-col">
+              <span className="truncate font-medium">{user.name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </span>
             </span>
-          </span>
-        </DropdownMenuLabel>
+          </DropdownMenuLabel>
+          <DropdownMenuItem render={<Link href="/profile" />}>
+            <User />
+            <span>Profile</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/settings" />}>
+            <Settings />
+            <span>Settings</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href="/profile" />}>
-          <User />
-          <span>Profile</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/settings" />}>
-          <Settings />
-          <span>Settings</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={isSigningOut}
-          onClick={handleSignOut}
-          variant="destructive"
-        >
-          <LogOut />
-          <span>{isSigningOut ? "Signing out…" : "Sign out"}</span>
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            disabled={isSigningOut}
+            onClick={handleSignOut}
+            variant="destructive"
+          >
+            <LogOut />
+            <span>{isSigningOut ? "Signing out…" : "Sign out"}</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
