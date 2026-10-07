@@ -192,7 +192,7 @@ HTTP request to a Route Handler (public project key attached)
       │  payload (Zod), upload size, rate limit
       ▼
 domain/service function → Drizzle → PostgreSQL
-      │  (screenshot uploaded to Cloudflare R2; URL stored on the Feedback row)
+      │  (screenshot uploaded to Cloudflare R2; object key stored on the Feedback row)
       ▼
 Feedback row created, scoped to the project (and transitively the
 project's organization)

@@ -162,4 +162,10 @@ describe.skipIf(!process.env.DATABASE_URL)("notifications (integration)", () => 
     expect(await queries.getUnreadNotificationCount(organizationB, userB)).toBe(1);
     expect(await queries.markNotificationRead(notificationB, organizationB, userB)).toBe(true);
   });
+
+  it("treats a malformed notification id as not found", async () => {
+    await expect(
+      queries.markNotificationRead("not-a-uuid", organizationA, userA),
+    ).resolves.toBe(false);
+  });
 });

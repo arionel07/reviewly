@@ -100,8 +100,8 @@ export function ProjectForm({
           name="clientId"
           render={({ field }) => (
             <Select
-              value={field.value || undefined}
-              onValueChange={field.onChange}
+              value={field.value || null}
+              onValueChange={(value) => field.onChange(value ?? "")}
               disabled={isSubmitting}
             >
               <SelectTrigger

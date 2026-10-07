@@ -91,7 +91,7 @@ export async function createReviewLink(page: Page, projectUrl: string): Promise<
 /** Requests a new project-level client review round and returns its fresh link. */
 export async function requestProjectReview(page: Page, projectUrl: string): Promise<string> {
   await page.goto(projectUrl);
-  await page.getByRole("button", { name: "Request review", exact: true }).click();
+  await page.getByRole("button", { name: /Request review(?: again)?/ }).click();
   await expect(page.getByText("In review", { exact: true })).toBeVisible();
   const linkLocator = page.locator("code", { hasText: "/r/" });
   await expect(linkLocator).toBeVisible();

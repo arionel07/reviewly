@@ -485,16 +485,19 @@ describe.skipIf(!process.env.DATABASE_URL)("review token domain (integration)", 
     it("preserves multiple immutable review rounds", async () => {
       const projectId = await createFreshProject(orgA, "Multiple rounds project");
       await addFeedbackWithStatus(projectId, "resolved");
-      const issued = await reviewQueries.createReviewAccessToken(projectId, orgA);
 
-      await reviewQueries.requestProjectReview(projectId, orgA);
-      await reviewActions.requestProjectChangesAction(issued!.rawToken);
+      const firstRequest = await reviewQueries.requestProjectReview(projectId, orgA);
+      if (!("review" in firstRequest)) throw new Error("Expected the first review request to succeed.");
+
+      await reviewActions.requestProjectChangesAction(firstRequest.rawToken);
       const firstRound = await reviewQueries.getLatestProjectReview(projectId, orgA);
-      const decidedApprove = await reviewActions.approveProjectReviewAction(issued!.rawToken);
-      const decidedChanges = await reviewActions.requestProjectChangesAction(issued!.rawToken);
-      await reviewQueries.requestProjectReview(projectId, orgA);
-      await reviewActions.approveProjectReviewAction(issued!.rawToken);
-      const approvedChanges = await reviewActions.requestProjectChangesAction(issued!.rawToken);
+      const decidedApprove = await reviewActions.approveProjectReviewAction(firstRequest.rawToken);
+      const decidedChanges = await reviewActions.requestProjectChangesAction(firstRequest.rawToken);
+      const secondRequest = await reviewQueries.requestProjectReview(projectId, orgA);
+      if (!("review" in secondRequest)) throw new Error("Expected the second review request to succeed.");
+
+      await reviewActions.approveProjectReviewAction(secondRequest.rawToken);
+      const approvedChanges = await reviewActions.requestProjectChangesAction(secondRequest.rawToken);
 
       const history = await reviewQueries.listProjectReviews(projectId, orgA);
       const notifications = await db

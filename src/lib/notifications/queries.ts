@@ -2,6 +2,7 @@ import { and, count, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import { notificationReads, notifications } from "@/db/schema";
+import { isUuid } from "@/lib/db/is-uuid";
 import {
   getNotificationHref,
   type NotificationSource,
@@ -123,6 +124,10 @@ export async function markNotificationRead(
   organizationId: string,
   userId: string,
 ): Promise<boolean> {
+  if (!isUuid(notificationId)) {
+    return false;
+  }
+
   const [notification] = await db
     .select({ id: notifications.id })
     .from(notifications)

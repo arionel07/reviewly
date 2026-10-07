@@ -119,6 +119,20 @@ test.describe("client review portal", () => {
     await clientContext.close();
   });
 
+  test("a valid link returns not found for a missing feedback item", async ({ page, browser }) => {
+    const { projectUrl } = await setUpProjectWithResolvedFeedback(page, "missing-feedback");
+    const reviewUrl = await createReviewLink(page, projectUrl);
+
+    const clientContext = await browser.newContext();
+    const clientPage = await clientContext.newPage();
+    await clientPage.goto(
+      `${reviewUrl}/feedback/00000000-0000-4000-8000-000000000000`,
+    );
+
+    await expect(clientPage.getByText("Feedback not found", { exact: true })).toBeVisible();
+    await clientContext.close();
+  });
+
   test("an unknown/invalid link shows the same neutral state", async ({ browser }) => {
     const clientContext = await browser.newContext();
     const clientPage = await clientContext.newPage();
@@ -207,7 +221,7 @@ test.describe("client review portal", () => {
 
     await page.goto(projectUrl);
     await expect(page.getByText("Approved", { exact: true })).toBeVisible();
-    await expect(page.getByText("Changes requested", { exact: true })).toBeVisible();
+    await expect(page.getByText("Round 1 · Changes requested", { exact: true })).toBeVisible();
     await clientContext.close();
   });
 
@@ -218,6 +232,7 @@ test.describe("client review portal", () => {
     await page.getByRole("button", { name: "Resend review link", exact: true }).click();
     const linkLocator = page.locator("code", { hasText: "/r/" });
     await expect(linkLocator).toBeVisible();
+    await expect(linkLocator).not.toHaveText(firstReviewUrl);
     const secondReviewUrl = (await linkLocator.textContent())?.trim();
     if (!secondReviewUrl) throw new Error("Could not read the resent review link.");
     expect(secondReviewUrl).not.toBe(firstReviewUrl);
@@ -230,7 +245,8 @@ test.describe("client review portal", () => {
     await expect(clientPage.getByText("Ready for review", { exact: true })).toBeVisible();
     await clientContext.close();
 
-    await expect(page.getByText("Review history", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Round 1 · In review", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Round 2/)).toHaveCount(0);
   });
 
   test("requesting review without client email still exposes a fresh copyable link", async ({
