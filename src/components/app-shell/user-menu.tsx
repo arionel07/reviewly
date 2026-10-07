@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
+import { ChevronsUpDown, LogOut, Settings, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -65,6 +65,10 @@ export function UserMenu({
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem render={<Link href="/profile" />}>
+          <User />
+          <span>Profile</span>
+        </DropdownMenuItem>
         <DropdownMenuItem render={<Link href="/settings" />}>
           <Settings />
           <span>Settings</span>

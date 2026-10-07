@@ -8,9 +8,14 @@ export const metadata: Metadata = {
   title: "Settings — Reviewly",
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { user, organizationId } = await requireWorkspace();
   const workspace = await getWorkspace(organizationId);
+  const { tab } = await searchParams;
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -18,7 +23,7 @@ export default async function SettingsPage() {
         title="Settings"
         description="Workspace and account settings"
       />
-      <Tabs defaultValue="workspace">
+        <Tabs defaultValue={tab === "account" ? "account" : "workspace"}>
         <TabsList>
           <TabsTrigger value="workspace">Workspace</TabsTrigger>
           <TabsTrigger value="account">Account</TabsTrigger>
