@@ -14,6 +14,9 @@
 - Search dialog: `/tmp/reviewly-search-dialog.png` (1440 × 1000 CSS px, device scale 1).
 - Create client dialog: `/tmp/reviewly-client-dialog.png` (1440 × 1000 CSS px, device scale 1).
 - Mobile dialog-flow smoke: `/tmp/reviewly-dialog-mobile.png` (390 × 844 CSS px, device scale 1).
+- Project detail: `/tmp/reviewly-project-detail.png` (1540 × 960 CSS px, device scale 1).
+- Empty search dialog on detail: `/tmp/reviewly-search-empty.png` (1540 × 960 CSS px, device scale 1).
+- Feedback detail: `/tmp/reviewly-feedback-detail.png` (1540 × 960 CSS px, device scale 1).
 - Runtime: Next dev on port 3002 with the isolated test database; no browser console or page errors.
 
 ## State and interactions checked
@@ -25,6 +28,8 @@
 - Mobile dashboard layout at 390 × 844.
 - Search dialog query filtering and keyboard close behavior.
 - Route-backed create dialog open/close behavior for clients.
+- Project detail action row and feedback detail action/context sections.
+- Empty search dialog state from a detail page.
 - Console and page errors: clean.
 
 ## Fidelity comparison
