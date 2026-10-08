@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           }))}
           unreadNotificationCount={unreadNotificationCount}
         />
-        <main className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</main>
+        <main className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-8 p-5 sm:p-7 lg:p-10">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

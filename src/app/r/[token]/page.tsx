@@ -46,7 +46,7 @@ export default async function ReviewProjectPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold text-foreground">{project.name}</h1>
+        <h1 className="text-3xl font-light tracking-[-0.04em] text-foreground">{project.name}</h1>
         <Button
           variant="outline"
           className="w-fit"
@@ -89,7 +89,7 @@ export default async function ReviewProjectPage({
               <li key={item.id}>
                 <Link
                   href={`/r/${token}/feedback/${item.id}`}
-                  className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                  className="flex items-center justify-between gap-4 border-b border-border/70 px-1 py-4 text-sm transition-colors last:border-0 hover:bg-muted/60"
                 >
                   <span className="line-clamp-1 font-medium text-foreground">{item.message}</span>
                   <FeedbackStatusBadge status={item.status} />

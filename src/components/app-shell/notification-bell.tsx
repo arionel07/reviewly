@@ -79,13 +79,13 @@ export function NotificationBell({
     <Popover>
       <PopoverTrigger
         aria-label="Open notifications"
-        className="relative inline-flex size-8 items-center justify-center rounded-md text-muted-foreground outline-hidden hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="relative inline-flex size-9 items-center justify-center rounded-full text-muted-foreground outline-hidden hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Bell className="size-4" />
         {unreadCount > 0 ? (
           <Badge
             variant="destructive"
-            className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] leading-none"
+            className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] leading-none"
           >
             {badgeLabel}
           </Badge>

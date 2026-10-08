@@ -16,7 +16,7 @@ export default async function ProfilePage() {
     <div className="flex flex-1 flex-col gap-6">
       <PageHeader title="Profile" description="Your Reviewly account" />
 
-      <section className="max-w-xl rounded-xl border border-border p-4">
+      <section className="max-w-xl rounded-2xl bg-card p-6">
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs text-muted-foreground">Name</p>

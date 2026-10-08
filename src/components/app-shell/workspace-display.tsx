@@ -13,8 +13,8 @@ export function WorkspaceDisplay({
   organizations?: { id: string; name: string }[];
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-sidebar-accent-foreground">
+    <div className="flex items-center gap-2 rounded-full border border-sidebar-border bg-background px-3 py-2 text-sm">
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground">
         <Building2 className="size-3.5" />
       </span>
       <span className="truncate font-medium text-sidebar-foreground">

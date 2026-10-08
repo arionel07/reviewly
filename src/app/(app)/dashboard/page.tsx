@@ -60,7 +60,7 @@ export default async function DashboardPage() {
             </Button>
           </div>
 
-          <div className="rounded-xl border border-border">
+          <div className="overflow-hidden rounded-2xl border border-border bg-background">
             <Table>
               <TableHeader>
                 <TableRow>

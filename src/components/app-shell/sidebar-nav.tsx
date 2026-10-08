@@ -33,6 +33,7 @@ export function SidebarNav({ items }: { items: SidebarNavItem[] }) {
             <SidebarMenuButton
               render={<Link href={item.href} />}
               isActive={isActive}
+              className="h-9 rounded-lg px-3 text-[0.9rem] text-sidebar-foreground/75 data-active:bg-sidebar-accent data-active:text-sidebar-foreground data-active:font-medium"
               aria-current={isActive ? "page" : undefined}
             >
               {item.icon}

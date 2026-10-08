@@ -37,7 +37,7 @@ export function ProjectReviewDecision({
 
   if (status !== "pending") {
     return (
-      <section className="rounded-xl border border-border bg-muted/30 p-4">
+      <section className="rounded-2xl bg-card p-5">
         <h2 className="text-base font-semibold text-foreground">
           {status === "approved" ? "Approved" : "Changes requested"}
         </h2>
@@ -72,7 +72,7 @@ export function ProjectReviewDecision({
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4">
+    <section className="flex flex-col gap-3 rounded-2xl bg-card p-5">
       <div>
         <h2 className="text-base font-semibold text-foreground">Ready for review</h2>
         <p className="mt-1 text-sm text-muted-foreground">

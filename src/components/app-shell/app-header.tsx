@@ -19,7 +19,7 @@ export function AppHeader({
   unreadNotificationCount: number;
 }) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-5 lg:px-8">
       <SidebarTrigger />
       <div className="ml-auto">
         <NotificationBell

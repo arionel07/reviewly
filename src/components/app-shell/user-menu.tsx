@@ -56,7 +56,7 @@ export function UserMenu({
         </span>
         <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top">
+      <DropdownMenuContent align="start" side="top" sideOffset={10}>
         <DropdownMenuGroup>
           <DropdownMenuLabel>
             <span className="flex flex-col">

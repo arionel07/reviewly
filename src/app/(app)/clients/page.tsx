@@ -39,7 +39,7 @@ export default async function ClientsPage() {
           action={<Button render={<Link href="/clients/new" />}>Add client</Button>}
         />
       ) : (
-        <div className="rounded-xl border border-border">
+        <div className="overflow-hidden rounded-2xl border border-border bg-background">
           <Table>
             <TableHeader>
               <TableRow>

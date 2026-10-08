@@ -11,11 +11,11 @@ export default function ReviewLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-2xl items-center px-4 py-4">
-          <span className="text-sm font-semibold text-foreground">Reviewly</span>
+        <div className="mx-auto flex w-full max-w-3xl items-center px-5 py-5 sm:px-8">
+          <span className="text-lg font-light tracking-[-0.03em] text-foreground">Reviewly</span>
         </div>
       </header>
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-5 py-10 sm:px-8">
         {children}
       </main>
     </div>

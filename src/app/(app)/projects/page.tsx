@@ -40,7 +40,7 @@ export default async function ProjectsPage() {
           action={<Button render={<Link href="/projects/new" />}>New project</Button>}
         />
       ) : (
-        <div className="rounded-xl border border-border">
+        <div className="overflow-hidden rounded-2xl border border-border bg-background">
           <Table>
             <TableHeader>
               <TableRow>

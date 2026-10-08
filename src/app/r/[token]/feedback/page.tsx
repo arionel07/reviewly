@@ -56,7 +56,7 @@ export default async function ReviewFeedbackListPage({
             <li key={item.id}>
               <Link
                 href={`/r/${token}/feedback/${item.id}`}
-                className="flex flex-col gap-1 rounded-xl border border-border px-4 py-3 hover:bg-muted/50"
+                className="flex flex-col gap-1 rounded-2xl bg-card px-5 py-4 transition-colors hover:bg-muted"
               >
                 <div className="flex items-center justify-between gap-4">
                   <p className="line-clamp-1 text-sm font-medium text-foreground">
