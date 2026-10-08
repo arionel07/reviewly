@@ -38,8 +38,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             createdAt: notification.createdAt.toISOString(),
           }))}
           unreadNotificationCount={unreadNotificationCount}
+          user={{ name: user.name, email: user.email }}
         />
-        <main className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-8 p-5 sm:p-7 lg:p-10">{children}</main>
+        <main className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-8 p-5 pt-14 sm:p-7 sm:pt-14 lg:p-5 lg:pt-14">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -24,8 +24,10 @@ function getInitials(name: string) {
 
 export function UserMenu({
   user,
+  compact = false,
 }: {
   user: { name: string; email: string };
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -40,23 +42,33 @@ export function UserMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        className={compact
+          ? "flex size-9 items-center justify-center rounded-full p-0 text-left outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          : "flex w-full items-center gap-2 rounded-full border border-transparent p-2 text-left text-sm outline-hidden hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"}
         aria-label="Open account menu"
       >
         <Avatar size="sm">
           <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
         </Avatar>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-sm font-medium text-sidebar-foreground">
-            {user.name}
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {user.email}
-          </span>
-        </span>
-        <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+        {!compact ? (
+          <>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm font-medium text-sidebar-foreground">
+                {user.name}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </span>
+            </span>
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </>
+        ) : null}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" sideOffset={10}>
+      <DropdownMenuContent
+        align={compact ? "end" : "start"}
+        side={compact ? "bottom" : "top"}
+        sideOffset={compact ? 8 : 10}
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>
             <span className="flex flex-col">

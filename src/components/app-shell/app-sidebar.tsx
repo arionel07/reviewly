@@ -37,7 +37,7 @@ export function AppSidebar({
       <SidebarHeader>
         <Link
           href="/dashboard"
-          className="flex items-center rounded-md px-2 py-2 text-lg font-light tracking-[-0.03em] text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          className="flex items-center rounded-md px-2 py-2 text-[1.1rem] font-semibold tracking-[-0.04em] text-sidebar-foreground outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           Reviewly
         </Link>
@@ -47,7 +47,7 @@ export function AppSidebar({
         />
         <Button
           variant="outline"
-          className="mt-1 w-full justify-start gap-2 bg-background px-3 text-sm font-normal"
+          className="mt-1 w-full justify-start gap-1.5 bg-background px-3 text-xs font-medium"
           render={<Link href="/projects/new" />}
         >
           <Plus />

@@ -11,7 +11,7 @@
 - Notification popover: `/tmp/reviewly-notifications.png` (1440 × 1000 CSS px, device scale 1).
 - Account menu: `/tmp/reviewly-account-menu.png` (1440 × 1000 CSS px, device scale 1).
 - Mobile dashboard: `/tmp/reviewly-dashboard-mobile.png` (390 × 844 CSS px, device scale 1).
-- Runtime: production-style `next start` on port 3002.
+- Runtime: Next dev on port 3002 with the isolated test database; no browser console or page errors.
 
 ## State and interactions checked
 
@@ -26,19 +26,20 @@
 
 The implementation was compared against the concept and supplied references across:
 
-1. Typography — existing Geist sans is now correctly bound to the Tailwind `font-sans` token; page titles are lighter and tighter.
-2. Layout rhythm — larger page gutters, 1280px content measure, calmer vertical spacing, and more breathing room in table rows.
-3. Colors — warm paper canvas `#fdfcfc`, surface `#f5f3f1`, hairline `#ebe8e4`, black primary actions, and restrained semantic colors.
-4. Container model — meaningful surfaces use soft 20px radii; nested enterprise-style borders and shadows were reduced.
-5. Controls — pill buttons, quiet outlined secondary actions, warm inputs, neutral badges, and restrained popover/dialog elevation.
-6. Shell — quiet eggshell sidebar, understated active navigation, workspace capsule, minimal header, and compact account menu.
+1. Typography — Geist sans is bound to the Tailwind `font-sans` token, with compact tracking and semibold display titles matching the reference density.
+2. Layout rhythm — 168px desktop sidebar, 1280px content measure, compact top overlay, and tighter table rows.
+3. Colors — white canvas, cool neutral surfaces, blue avatar accent, black primary actions, and restrained semantic colors.
+4. Container model — meaningful surfaces use soft 20–28px radii with light borders and quiet elevation.
+5. Controls — pill buttons, pill inputs/selects, quiet outlined secondary actions, neutral badges, and reference-style popover/dialog elevation.
+6. Shell — quiet light sidebar, understated active navigation, workspace capsule, top-right notification/avatar actions, and compact account menu.
 7. Responsive behavior — stats stack cleanly on mobile and the structured project table remains usable in its existing horizontal scroll container.
 
 ## Fixes made during QA
 
 - Fixed the self-referential `--font-sans` token that caused a serif browser fallback.
-- Increased the account-menu top offset so its panel does not visually collide with the sidebar footer.
-- Removed the Next dev overlay from evidence by validating against `next start`.
+- Added a separate compact header account trigger while preserving the sidebar account entry point.
+- Moved the desktop header into an overlay so page content starts at the same visual height as the reference.
+- Updated the evidence after a clean console/page-error visual smoke run.
 
 ## Intentional deviations
 

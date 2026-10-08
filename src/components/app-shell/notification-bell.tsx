@@ -85,13 +85,13 @@ export function NotificationBell({
         {unreadCount > 0 ? (
           <Badge
             variant="destructive"
-            className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] leading-none"
+            className="absolute -top-0.5 -right-0.5 h-4 min-w-4 border-2 border-background bg-[#f04444] px-1 text-[10px] leading-none text-white"
           >
             {badgeLabel}
           </Badge>
         ) : null}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)]">
+      <PopoverContent align="end" className="w-[22rem] max-w-[calc(100vw-2rem)]">
         <PopoverHeader className="flex-row items-center justify-between gap-2 px-1 py-0.5">
           <PopoverTitle>Notifications</PopoverTitle>
           {unreadCount > 0 ? (
@@ -123,7 +123,7 @@ export function NotificationBell({
                     event.preventDefault();
                     markReadAndNavigate(notification);
                   }}
-                  className="flex gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+                  className="flex gap-2 rounded-xl px-2 py-2.5 text-sm hover:bg-muted"
                 >
                   <span
                     aria-hidden="true"
