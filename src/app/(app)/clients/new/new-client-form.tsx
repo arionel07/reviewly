@@ -9,6 +9,8 @@ export function NewClientForm() {
       defaultValues={{ name: "", email: undefined }}
       submitLabel="Create client"
       pendingLabel="Creating client…"
+      layout="dialog"
+      cancelHref="/clients"
       onSubmit={(values) => createClientAction(values)}
     />
   );

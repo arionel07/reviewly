@@ -123,9 +123,15 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 14px;
+    font-weight: 500;
     letter-spacing: -0.012em;
   }
   html {
     @apply font-sans;
+  }
+
+  .lucide {
+    stroke-width: 1.75;
   }
 }

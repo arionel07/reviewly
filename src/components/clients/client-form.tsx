@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -13,11 +14,15 @@ export function ClientForm({
   onSubmit,
   submitLabel,
   pendingLabel,
+  layout = "page",
+  cancelHref,
 }: {
   defaultValues: ClientInput;
   onSubmit: (values: ClientInput) => Promise<{ error: string } | undefined>;
   submitLabel: string;
   pendingLabel: string;
+  layout?: "page" | "dialog";
+  cancelHref?: string;
 }) {
   const form = useForm<ClientInput>({
     resolver: zodResolver(clientSchema),
@@ -38,18 +43,22 @@ export function ClientForm({
 
   return (
     <form
-      className="flex max-w-sm flex-col gap-4"
+      className={layout === "dialog" ? "flex w-full flex-col gap-5" : "flex max-w-sm flex-col gap-4"}
       noValidate
       onSubmit={form.handleSubmit(handleSubmit)}
     >
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="client-name">Name</Label>
+        <Label htmlFor="client-name">{layout === "dialog" ? "Display name" : "Name"}</Label>
+        {layout === "dialog" ? (
+          <p className="text-sm text-muted-foreground">A human-readable name for your client.</p>
+        ) : null}
         <Controller
           control={form.control}
           name="name"
           render={({ field }) => (
             <Input
               id="client-name"
+              aria-label={layout === "dialog" ? "Name" : undefined}
               type="text"
               autoComplete="organization"
               aria-invalid={!!form.formState.errors.name}
@@ -72,6 +81,9 @@ export function ClientForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="client-email">Email</Label>
+        {layout === "dialog" ? (
+          <p className="text-sm text-muted-foreground">Optional contact email for this client.</p>
+        ) : null}
         <Controller
           control={form.control}
           name="email"
@@ -104,8 +116,13 @@ export function ClientForm({
         </p>
       ) : null}
 
-      <div>
-        <Button type="submit" disabled={isSubmitting}>
+      <div className={layout === "dialog" ? "flex flex-col-reverse gap-2 sm:flex-row" : undefined}>
+        {layout === "dialog" && cancelHref ? (
+          <Button variant="secondary" className="flex-1" render={<Link href={cancelHref} />}>
+            Cancel
+          </Button>
+        ) : null}
+        <Button type="submit" className={layout === "dialog" ? "flex-1" : undefined} disabled={isSubmitting}>
           {isSubmitting ? pendingLabel : submitLabel}
         </Button>
       </div>

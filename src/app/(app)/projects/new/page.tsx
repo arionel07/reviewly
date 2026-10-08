@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { z } from "zod";
 
-import { PageHeader } from "@/components/app-shell/page-header";
+import { RouteDialog } from "@/components/app-shell/route-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { requireWorkspace } from "@/lib/auth/session";
@@ -27,17 +27,17 @@ export default async function NewProjectPage({
 
   if (clients.length === 0) {
     return (
-      <div className="flex flex-1 flex-col gap-6">
-        <PageHeader
-          title="New project"
-          description="Set up a project to start collecting feedback"
-        />
+      <RouteDialog
+        title="Create a project"
+        description="Set up a project to start collecting feedback."
+        backHref="/projects"
+      >
         <EmptyState
           title="Create a client first"
           description="Projects belong to a client. Add a client before creating a project."
           action={<Button render={<Link href="/clients/new" />}>New client</Button>}
         />
-      </div>
+      </RouteDialog>
     );
   }
 
@@ -54,15 +54,15 @@ export default async function NewProjectPage({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <PageHeader
-        title="New project"
-        description="Set up a project to start collecting feedback"
-      />
+    <RouteDialog
+      title="Create a project"
+      description="Set up a project to start collecting feedback."
+      backHref="/projects"
+    >
       <NewProjectForm
         clients={clients.map((client) => ({ id: client.id, name: client.name }))}
         defaultClientId={defaultClientId}
       />
-    </div>
+    </RouteDialog>
   );
 }

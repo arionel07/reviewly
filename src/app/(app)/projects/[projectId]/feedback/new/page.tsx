@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { PageHeader } from "@/components/app-shell/page-header";
+import { RouteDialog } from "@/components/app-shell/route-dialog";
 import { requireWorkspace } from "@/lib/auth/session";
 import { getProject } from "@/lib/projects/queries";
 
@@ -25,9 +25,12 @@ export default async function NewFeedbackPage({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <PageHeader title="Add feedback" description={project.name} />
+    <RouteDialog
+      title="Add feedback"
+      description={project.name}
+      backHref={`/projects/${project.id}/feedback`}
+    >
       <NewFeedbackForm projectId={project.id} />
-    </div>
+    </RouteDialog>
   );
 }

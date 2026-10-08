@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -14,11 +15,15 @@ export function FeedbackForm({
   onSubmit,
   submitLabel,
   pendingLabel,
+  layout = "page",
+  cancelHref,
 }: {
   defaultValues: FeedbackInput;
   onSubmit: (values: FeedbackInput) => Promise<{ error: string } | undefined>;
   submitLabel: string;
   pendingLabel: string;
+  layout?: "page" | "dialog";
+  cancelHref?: string;
 }) {
   const form = useForm<FeedbackInput>({
     resolver: zodResolver(feedbackSchema),
@@ -39,7 +44,7 @@ export function FeedbackForm({
 
   return (
     <form
-      className="flex max-w-lg flex-col gap-4"
+      className={layout === "dialog" ? "flex w-full flex-col gap-5" : "flex max-w-lg flex-col gap-4"}
       noValidate
       onSubmit={form.handleSubmit(handleSubmit)}
     >
@@ -147,8 +152,13 @@ export function FeedbackForm({
         </p>
       ) : null}
 
-      <div>
-        <Button type="submit" disabled={isSubmitting}>
+      <div className={layout === "dialog" ? "flex flex-col-reverse gap-2 sm:flex-row" : undefined}>
+        {layout === "dialog" && cancelHref ? (
+          <Button variant="secondary" className="flex-1" render={<Link href={cancelHref} />}>
+            Cancel
+          </Button>
+        ) : null}
+        <Button type="submit" className={layout === "dialog" ? "flex-1" : undefined} disabled={isSubmitting}>
           {isSubmitting ? pendingLabel : submitLabel}
         </Button>
       </div>

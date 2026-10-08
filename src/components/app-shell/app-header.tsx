@@ -1,6 +1,7 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
 import { UserMenu } from "@/components/app-shell/user-menu";
+import { GlobalSearch } from "@/components/app-shell/global-search";
 
 type NotificationItem = {
   id: string;
@@ -25,6 +26,7 @@ export function AppHeader({
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-14 shrink-0 items-center justify-between px-4 lg:px-5">
       <SidebarTrigger className="pointer-events-auto md:hidden" />
       <div className="pointer-events-auto ml-auto flex items-center gap-1">
+        <GlobalSearch />
         <NotificationBell
           initialNotifications={notifications}
           initialUnreadCount={unreadNotificationCount}

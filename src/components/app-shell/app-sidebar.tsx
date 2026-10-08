@@ -47,7 +47,7 @@ export function AppSidebar({
         />
         <Button
           variant="outline"
-          className="mt-1 w-full justify-start gap-1.5 bg-background px-3 text-xs font-medium"
+          className="mt-1 h-[42px] w-[230px] max-w-full justify-start gap-1.5 bg-background px-4 py-2 text-sm font-medium"
           render={<Link href="/projects/new" />}
         >
           <Plus />

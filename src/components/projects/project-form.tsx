@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ export function ProjectForm({
   onSubmit,
   submitLabel,
   pendingLabel,
+  layout = "page",
+  cancelHref,
 }: {
   defaultValues: ProjectInput;
   clients: { id: string; name: string }[];
@@ -40,6 +43,8 @@ export function ProjectForm({
   onSubmit: (values: ProjectInput) => Promise<{ error: string } | undefined>;
   submitLabel: string;
   pendingLabel: string;
+  layout?: "page" | "dialog";
+  cancelHref?: string;
 }) {
   const form = useForm<ProjectInput>({
     resolver: zodResolver(projectSchema),
@@ -62,18 +67,22 @@ export function ProjectForm({
 
   return (
     <form
-      className="flex max-w-sm flex-col gap-4"
+      className={layout === "dialog" ? "flex w-full flex-col gap-5" : "flex max-w-sm flex-col gap-4"}
       noValidate
       onSubmit={form.handleSubmit(handleSubmit)}
     >
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="project-name">Project name</Label>
+        <Label htmlFor="project-name">{layout === "dialog" ? "Display name" : "Project name"}</Label>
+        {layout === "dialog" ? (
+          <p className="text-sm text-muted-foreground">A human-readable name for your project.</p>
+        ) : null}
         <Controller
           control={form.control}
           name="name"
           render={({ field }) => (
             <Input
               id="project-name"
+              aria-label={layout === "dialog" ? "Project name" : undefined}
               type="text"
               aria-invalid={!!form.formState.errors.name}
               aria-describedby={form.formState.errors.name ? "project-name-error" : undefined}
@@ -138,6 +147,9 @@ export function ProjectForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="project-website-url">Website URL</Label>
+        {layout === "dialog" ? (
+          <p className="text-sm text-muted-foreground">The website where the feedback widget will appear.</p>
+        ) : null}
         <Controller
           control={form.control}
           name="websiteUrl"
@@ -202,8 +214,13 @@ export function ProjectForm({
         </p>
       ) : null}
 
-      <div>
-        <Button type="submit" disabled={isSubmitting}>
+      <div className={layout === "dialog" ? "flex flex-col-reverse gap-2 sm:flex-row" : undefined}>
+        {layout === "dialog" && cancelHref ? (
+          <Button variant="secondary" className="flex-1" render={<Link href={cancelHref} />}>
+            Cancel
+          </Button>
+        ) : null}
+        <Button type="submit" className={layout === "dialog" ? "flex-1" : undefined} disabled={isSubmitting}>
           {isSubmitting ? pendingLabel : submitLabel}
         </Button>
       </div>

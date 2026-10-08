@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/components/app-shell/page-header";
+import { RouteDialog } from "@/components/app-shell/route-dialog";
 
 import { NewClientForm } from "./new-client-form";
 
@@ -10,9 +10,12 @@ export const metadata: Metadata = {
 
 export default function NewClientPage() {
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <PageHeader title="New client" description="Add a client to your workspace" />
+    <RouteDialog
+      title="Create a client"
+      description="Add a client to your workspace."
+      backHref="/clients"
+    >
       <NewClientForm />
-    </div>
+    </RouteDialog>
   );
 }

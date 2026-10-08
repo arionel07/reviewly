@@ -10,6 +10,8 @@ export function NewFeedbackForm({ projectId }: { projectId: string }) {
       onSubmit={(values) => createFeedbackAction(projectId, values)}
       submitLabel="Add feedback"
       pendingLabel="Adding feedback…"
+      layout="dialog"
+      cancelHref={`/projects/${projectId}/feedback`}
     />
   );
 }

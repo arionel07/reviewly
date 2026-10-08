@@ -22,6 +22,8 @@ export function NewProjectForm({
       onSubmit={(values) => createProjectAction(values)}
       submitLabel="Create project"
       pendingLabel="Creating project…"
+      layout="dialog"
+      cancelHref="/projects"
     />
   );
 }
