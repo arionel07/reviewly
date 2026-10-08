@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reviewly",
-  description: "Visual feedback and client approval for agency projects.",
+  title: "Reviewly — Better feedback, faster approvals",
+  description:
+    "Visual feedback and client approval for teams that care about the details.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
